@@ -1,0 +1,9 @@
+AUTHORS
+build/
+ChangeLog
+.tox/
+nuage_openstack_auditor.egg-info/
+*.json
+*.log
+*.pyc
+.idea/

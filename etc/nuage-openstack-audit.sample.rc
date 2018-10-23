@@ -1,0 +1,69 @@
+# ----------------------------------------------------------------------------
+
+          NUAGE-OPENSTACK-AUDIT SETTINGS
+
+# ----------------------------------------------------------------------------
+
+
+#     --- OS AUDIT CORE SETTINGS ---
+
+# OS_AUDIT_LOG_DIR specifies the directory in which the audit log file(s)
+# will be written. By default this is '.'
+# export OS_AUDIT_LOG_DIR=.
+
+# OS_AUDIT_LOG_LEVEL specifies the logging level. By default this is 'INFO'.
+# export OS_AUDIT_LOG_LEVEL=INFO
+
+# OS_AUDIT_REPORT_DIR specifies the directory in which the audit report
+# file(s) will be written. By default this is '.'
+# export OS_AUDIT_REPORT_DIR=.
+
+# OS_AUDIT_REPORT_FILE can be specified in order to overrule the audit report
+# filename which otherwise is auto-generated.
+# When not specified (default), the program will compose the audit report
+# filename based on the time at which the audit was initiated.
+# export OS_AUDIT_REPORT_FILE=
+
+
+#     --- OS AUDIT SYSTEM UNDER AUDIT SETTINGS ---
+
+# OS_CMS_ID defines the CMS ID of the OpenStack instance.
+# This is a mandatory setting.
+export OS_CMS_ID=changeme
+
+# OS_VSD_SERVER defines the VSD server address and port.
+# This is a mandatory setting.
+export OS_VSD_SERVER=vsd.example.com:8443
+
+# OS_DEFAULT_NETPARTITION defines the default net-partition name in OpenStack
+# This is a mandatory setting.
+export OS_DEFAULT_NETPARTITION=changeme
+
+
+# Below are supplementary VSD API access/credential settings, which default to
+# as documented below and correspond to the plugin defaults.
+# Please consult Nuage plugin documentation for details.
+
+# default OS_VSD_VERIFY_CERT is False
+# export OS_VSD_VERIFY_CERT=False
+
+# default OS_VSD_AUTH_RESOURCE is '/me'
+# export OS_VSD_AUTH_RESOURCE=/me
+
+# default OS_VSD_ORGANIZATION is 'csp'
+# export OS_VSD_ORGANIZATION=csp
+
+# default OS_VSD_SERVER_AUTH is 'csproot:csproot'
+# export OS_VSD_SERVER_AUTH=csproot:csproot
+
+# default OS_VSD_SERVER_SSL is True
+# export OS_VSD_SERVER_SSL=True
+
+# default OS_VSD_BASE_URI is '/nuage/api/v5_0'
+# export OS_VSD_BASE_URI=/nuage/api/v5_0
+
+# default OS_VSD_SERVER_TIMEOUT is 30
+# export OS_VSD_SERVER_TIMEOUT=30
+
+# default OS_VSD_MAX_RETRIES is 5
+# export OS_VSD_MAX_RETRIES=5
