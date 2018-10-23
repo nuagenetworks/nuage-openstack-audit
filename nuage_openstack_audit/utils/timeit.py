@@ -16,11 +16,16 @@ import time
 
 from nuage_openstack_audit.utils import logger
 
-LOG = logger.get_logger()
-__ = logger.HeaderTwo
+DEBUG = logger.Reporter('DEBUG')
 
 
 class TimeIt(object):
+
+    enabled = False
+
+    @staticmethod
+    def enable(enable=True):
+        TimeIt.enabled = enable
 
     @staticmethod
     def timeit(method):
@@ -28,7 +33,12 @@ class TimeIt(object):
             ts = time.time()
             result = method(*args, **kw)
             te = time.time()
-            LOG.info(__('%s.%s took %s secs'),
-                     args[0].__class__.__name__, method.__name__, int(te - ts))
+            DEBUG.h1(
+                '%s.%s took %s secs',
+                args[0].__class__.__name__, method.__name__, int(te - ts))
             return result
-        return timed
+
+        if TimeIt.enabled:
+            return timed
+        else:
+            return method

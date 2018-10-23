@@ -33,7 +33,7 @@ from osc_lib.exceptions import Unauthorized
 
 from nuage_openstack_audit.utils import logger
 from nuage_openstack_audit.utils.timeit import TimeIt
-from nuage_openstack_audit.utils.utils import get_env_var
+from nuage_openstack_audit.utils.utils import Utils
 
 # suppress warning
 requests.packages.urllib3.disable_warnings()
@@ -43,17 +43,17 @@ LOG = logger.get_logger()
 
 class OSCredentials(object):
     def __init__(self):
-        self.auth_url = get_env_var('OS_AUTH_URL')
-        self.username = get_env_var('OS_USERNAME')
-        self.project_name = get_env_var(
-            'OS_PROJECT_NAME', get_env_var('OS_TENANT_NAME'))
-        self.password = get_env_var('OS_PASSWORD')
+        self.auth_url = Utils.get_env_var('OS_AUTH_URL')
+        self.username = Utils.get_env_var('OS_USERNAME')
+        self.project_name = Utils.get_env_var(
+            'OS_PROJECT_NAME', Utils.get_env_var('OS_TENANT_NAME'))
+        self.password = Utils.get_env_var('OS_PASSWORD')
         self.identity_api_version = int(
-            get_env_var('OS_IDENTITY_API_VERSION', 3))
+            Utils.get_env_var('OS_IDENTITY_API_VERSION', 3))
         if self.is_v3():
             self.auth_url = self.assure_endswith(self.auth_url, '/v3')
-            self.user_domain_id = get_env_var('OS_USER_DOMAIN_ID')
-            self.project_domain_id = get_env_var('OS_PROJECT_DOMAIN_ID')
+            self.user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
+            self.project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
         else:
             self.auth_url = self.assure_endswith(self.auth_url, '/v2.0')
 
@@ -159,11 +159,12 @@ class Neutron(object):
     def delete_firewall_policy(self, policy):
         self.client.delete_firewall_policy(policy['id'])
 
-    def create_firewall(self, policy, router):
+    def create_firewall(self, policy, router, admin_state_up=True):
         return self.client.create_firewall(
             {'firewall': {
                 'router_ids': [router['id']],
-                'firewall_policy_id': policy['id']}})['firewall']
+                'firewall_policy_id': policy['id'],
+                'admin_state_up': admin_state_up}})['firewall']
 
     def delete_firewall(self, fw):
         self.client.delete_firewall(fw['id'])
@@ -206,10 +207,8 @@ class OSClient(object):
     def keystone(self):
         if not self._keystone:
             if self._v3:
-                LOG.debug('Authenticating with keystone v3...')
                 self._keystone = Keystone(self._session)
             else:
-                LOG.debug('Authenticating with keystone v2...')
                 self._keystone = Keystone(credentials=self._me)
         return self._keystone
 

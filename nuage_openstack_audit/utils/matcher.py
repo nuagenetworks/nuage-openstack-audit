@@ -26,6 +26,10 @@ class Matcher(object):
     def get_mapper(self):
         pass
 
+    @staticmethod
+    def as_is(value):
+        return value
+
     def map_neutron_to_vsd(self, neutron_obj):
         def do_mapping(mapping, obj):
             result = {}
@@ -41,7 +45,9 @@ class Matcher(object):
         v_n = self.map_neutron_to_vsd(neutron_obj)
         attr_discrepancies = []
         for k in six.iterkeys(v_n):
-            if str(v_n[k]) != str(vsd_obj[k]):
+            v_n_k = v_n[k]
+            vsd_o_k = getattr(vsd_obj, k)
+            if str(v_n_k) != str(vsd_o_k):
                 attr_discrepancies.append((k, '{} != {}'.format(
-                    v_n[k], vsd_obj[k])))
+                    v_n_k, vsd_o_k)))
         return attr_discrepancies

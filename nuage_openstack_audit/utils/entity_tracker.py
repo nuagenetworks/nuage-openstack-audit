@@ -12,14 +12,21 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-CMS_ID = None
+from nuage_openstack_audit.utils.logger import Reporter
 
 
-def get_vsd_external_id(neutron_id):
-    if neutron_id and '@' not in neutron_id and CMS_ID:
-        return neutron_id + '@' + CMS_ID
-    return neutron_id
+class EntityTracker(object):
+    def __init__(self, name=None, tracked_entities=None):
+        self.name = name
+        self.tracked = len(tracked_entities) if tracked_entities else 0
+
+    def __iadd__(self, e):
+        self.tracked += 1
+        return self
+
+    def report(self, text='%d %s found', reported_as='h2'):
+        getattr(Reporter(), reported_as)(text, self.tracked, self.name)
 
 
-def strip_cms_id(external_id):
-    return external_id.split('@')[0] if external_id else external_id
+def tracked(*args):
+    return EntityTracker(*args)

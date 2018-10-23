@@ -19,19 +19,18 @@ import mock
 import testtools
 import time
 
-from nuage_openstack_audit.audit import Audit
+from nuage_openstack_audit.main import Main
 from nuage_openstack_audit.osclient.osclient import Neutron
 from nuage_openstack_audit.osclient.osclient import OSClient
-from nuage_openstack_audit.utils.utils import get_env_bool
-from nuage_openstack_audit.utils.utils import get_env_var
-from nuage_openstack_audit.vsdclient.impl.vsdclientimpl import VsdClientImpl
+from nuage_openstack_audit.utils.utils import Utils
+from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
 # run me using:
-# python -m testtools.run nuage_openstack_audit/test/audit_test.py
+# python -m testtools.run nuage_openstack_audit/test/fwaas_audit_test.py
 
 # *****************************************************************************
 #  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
-#            SETUP WITH ENV VARIABLES FOR OS AUDIT CORRECTLY SET
+#            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
 
 
@@ -40,6 +39,9 @@ def header():
         @functools.wraps(f)
         def wrapper(self, *func_args, **func_kwargs):
             if f.func_code.co_name != 'wrapper':
+                # make sure there is at least 1 sec in between tests such that
+                # report file is different
+                time.sleep(1)
                 print("\n=== START of {} ===".format(f.func_code.co_name))
             start_time = time.time()
             result = f(self, *func_args, **func_kwargs)
@@ -52,12 +54,26 @@ def header():
     return decorator
 
 
-class AuditTest(testtools.TestCase):
+class FWaaSAuditTestMixin(object):
+
+    main = None
+    routers = []
+    fws = []
+    fw_policies = []
+    fw_rules = []
+    nr_firewalls = 0
+    nr_rules_per_fw = 0
+    neutron = None
 
     @classmethod
-    def setUpClass(cls):
-        cls.neutron = OSClient().neutron()
-        cls.os_auditor = Audit(report_file='None')
+    def _setup_cls(cls, alternate_firewall_admin_state=False):
+        class Args(object):
+            def __init__(self, resource, report, verbose, debug):
+                self.resource = resource
+                self.report = report
+                self.verbose = verbose
+                self.debug = debug
+        cls.main = Main(Args('fwaas', None, True, False))
 
         cls.routers = []
         cls.fws = []
@@ -65,12 +81,16 @@ class AuditTest(testtools.TestCase):
         cls.fw_rules = []
 
         cls.nr_firewalls = int(
-            get_env_var('OS_AUDIT_TEST_NR_FIREWALLS', 2))
+            Utils.get_env_var('OS_AUDIT_TEST_NR_FIREWALLS', 3))
+        cls.nr_firewall_policies = cls.nr_firewalls
         cls.nr_rules_per_fw = cls.nr_firewalls - 1  # 1 rule is added on top
 
+        cls.neutron = OSClient().neutron()  # for building up test resources
+
         print('\n===== Start of tests =====')
-        if not get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
+        if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
             print('\n=== Creating %d firewalls ===' % cls.nr_firewalls)
+            admin_state_up = True
             for f in range(cls.nr_firewalls):
                 fw_policy_rule_ids = []
                 print('Creating %d+1 rules for fw %s' % (
@@ -89,21 +109,15 @@ class AuditTest(testtools.TestCase):
                 cls.fw_policies.append(policy)
                 router = cls.neutron.create_router('router')
                 cls.routers.append(router)
-                cls.fws.append(cls.neutron.create_firewall(policy, router))
-
-    def setUp(self):
-        super(AuditTest, self).setUp()
-
-        # make sure every test has new report
-        # and make sure there is at least 1 sec in between tests
-        time.sleep(1)
-        self.os_auditor.set_report_name(
-            suffix=time.strftime('%d-%m-%Y_%H:%M:%S'))
+                if alternate_firewall_admin_state:
+                    admin_state_up = not admin_state_up  # alternate
+                cls.fws.append(cls.neutron.create_firewall(
+                    policy, router, admin_state_up))
 
     @classmethod
-    def tearDownClass(cls):
+    def _teardown_cls(cls):
         print('\n===== End of tests =====')
-        if not get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
+        if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
             print('\n=== Deleting %d firewalls ===' % len(cls.fws))
             for fw in cls.fws:
                 cls.neutron.delete_firewall(fw)
@@ -117,26 +131,33 @@ class AuditTest(testtools.TestCase):
             for router in cls.routers:
                 cls.neutron.delete_router(router)
 
+
+class FWaaSAuditTest(testtools.TestCase, FWaaSAuditTestMixin):
+
+    @classmethod
+    def setUpClass(cls):
+        cls._setup_cls()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._teardown_cls()
+
     @header()
     def test_firewall_audit(self):
-        audit_report = self.os_auditor.do_audit('fwaas')
+        audit_report = self.main.run()
 
-        # expecting zero discrepancies :
+        # expecting zero discrepancies
         self.assertEqual(0, len(audit_report))
 
-    @mock.patch.object(VsdClientImpl, 'get_firewalls',
+    @mock.patch.object(VsdClient, 'get_firewalls',
                        return_value=[])
-    @mock.patch.object(VsdClientImpl, 'get_firewall_policies',
+    @mock.patch.object(VsdClient, 'get_firewall_acls',
                        return_value=[])
-    @mock.patch.object(VsdClientImpl, 'get_firewall_rules',
-                       return_value=[])
-    @mock.patch.object(VsdClientImpl, 'get_firewall_rules_by_policy',
-                       return_value=[])
-    @mock.patch.object(VsdClientImpl, 'get_firewall_rules_by_ids',
+    @mock.patch.object(VsdClient, 'get_firewall_rules',
                        return_value=[])
     @header()
     def test_firewall_audit_mocked_empty_vsd(self, *_):
-        audit_report = self.os_auditor.do_audit('fwaas')
+        audit_report = self.main.run()
 
         expected_fw_r_d = self.nr_firewalls
         expected_acl_d = self.nr_firewalls
@@ -156,7 +177,7 @@ class AuditTest(testtools.TestCase):
                        return_value=[])
     @header()
     def test_firewall_audit_mocked_empty_neutron(self, *_):
-        audit_report = self.os_auditor.do_audit('fwaas')
+        audit_report = self.main.run()
 
         expected_fw_r_d = self.nr_firewalls
         expected_acl_d = self.nr_firewalls
@@ -185,14 +206,53 @@ class AuditTest(testtools.TestCase):
                        get_firewall_rules_with_action_deny)
     @header()
     def test_firewall_audit_with_rules_having_action_mismatch(self):
-        audit_report = self.os_auditor.do_audit('fwaas')
+        audit_report = self.main.run()
 
         expected_rules_d = self.nr_firewalls * self.nr_rules_per_fw
         self.assertEqual(expected_rules_d, len(audit_report))
         for discrepancy in audit_report:
-            self.assertEqual("('stateful', 'False != True'),"
-                             "('action', 'DROP != FORWARD')",
-                             discrepancy['discrepancy_details'])
             self.assertEqual("ENTITY_MISMATCH",
                              discrepancy["discrepancy_type"])
             self.assertEqual("Firewall rule", discrepancy["entity_type"])
+            self.assertEqual("('stateful', 'False != True'),"
+                             "('action', 'DROP != FORWARD')",
+                             discrepancy['discrepancy_details'])
+
+    def get_firewall_policies_with_reversed_rules(self):
+        policies = self.client.list_firewall_policies()['firewall_policies']
+        for policy in policies:
+            policy['firewall_rules'] = reversed(policy['firewall_rules'])
+        return policies
+
+    @mock.patch.object(Neutron, 'get_firewall_policies',
+                       get_firewall_policies_with_reversed_rules)
+    @header()
+    def test_firewall_audit_with_reversed_rule_order_inside_policy(self):
+        audit_report = self.main.run()
+
+        expected_rules_d = self.nr_firewall_policies
+        self.assertEqual(expected_rules_d, len(audit_report))
+        for discrepancy in audit_report:
+            self.assertEqual("ENTITY_MISMATCH",
+                             discrepancy["discrepancy_type"])
+            self.assertEqual("Firewall policy", discrepancy["entity_type"])
+            self.assertIn('rule_ids', discrepancy["discrepancy_details"])
+
+
+class FWaaSAuditTestAlternatingFirewallStates(
+        testtools.TestCase, FWaaSAuditTestMixin):
+
+    @classmethod
+    def setUpClass(cls):
+        cls._setup_cls(alternate_firewall_admin_state=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._teardown_cls()
+
+    @header()
+    def test_firewall_audit(self):
+        audit_report = self.main.run()
+
+        # expecting zero discrepancies
+        self.assertEqual(0, len(audit_report))

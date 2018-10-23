@@ -12,11 +12,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from nuage_openstack_audit.vsdclient.impl.vsdclientimpl import VsdClientImpl
+from oslo_log import log
+
+LOG = log.getLogger(__name__)
 
 
-class VsdClientFactory(object):
+class SecurityGroupsMixin(object):
 
-    @staticmethod
-    def new_vsd_client(cms_id, **kwargs):
-        return VsdClientImpl(cms_id, **kwargs)
+    def __init__(self, vspk_helper):
+        self.vspk_helper = vspk_helper

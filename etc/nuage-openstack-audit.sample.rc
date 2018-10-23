@@ -1,11 +1,11 @@
 # ----------------------------------------------------------------------------
 
-          NUAGE-OPENSTACK-AUDIT SETTINGS
+#                NUAGE-OPENSTACK-AUDIT SETTINGS
 
 # ----------------------------------------------------------------------------
 
 
-#     --- OS AUDIT CORE SETTINGS ---
+#            --- OS AUDIT CORE SETTINGS ---
 
 # OS_AUDIT_LOG_DIR specifies the directory in which the audit log file(s)
 # will be written. By default this is '.'
@@ -25,7 +25,7 @@
 # export OS_AUDIT_REPORT_FILE=
 
 
-#     --- OS AUDIT SYSTEM UNDER AUDIT SETTINGS ---
+#            --- OS AUDIT SYSTEM UNDER AUDIT SETTINGS ---
 
 # OS_CMS_ID defines the CMS ID of the OpenStack instance.
 # This is a mandatory setting.
@@ -44,26 +44,8 @@ export OS_DEFAULT_NETPARTITION=changeme
 # as documented below and correspond to the plugin defaults.
 # Please consult Nuage plugin documentation for details.
 
-# default OS_VSD_VERIFY_CERT is False
-# export OS_VSD_VERIFY_CERT=False
-
-# default OS_VSD_AUTH_RESOURCE is '/me'
-# export OS_VSD_AUTH_RESOURCE=/me
-
-# default OS_VSD_ORGANIZATION is 'csp'
-# export OS_VSD_ORGANIZATION=csp
-
 # default OS_VSD_SERVER_AUTH is 'csproot:csproot'
 # export OS_VSD_SERVER_AUTH=csproot:csproot
 
-# default OS_VSD_SERVER_SSL is True
-# export OS_VSD_SERVER_SSL=True
-
 # default OS_VSD_BASE_URI is '/nuage/api/v5_0'
 # export OS_VSD_BASE_URI=/nuage/api/v5_0
-
-# default OS_VSD_SERVER_TIMEOUT is 30
-# export OS_VSD_SERVER_TIMEOUT=30
-
-# default OS_VSD_MAX_RETRIES is 5
-# export OS_VSD_MAX_RETRIES=5

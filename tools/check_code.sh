@@ -47,8 +47,7 @@ files_checked='.*\.\(py\|sh\|ini\|cfg\|txt\|rst\|yaml\)'
 
 for dir in . `find . -mindepth 1 -maxdepth 1  -type d \
                      -not -path '*/\.*' -not -path './build' \
-                     -not -path './*.egg-info' \
-                     -not -path './dist' `; \
+                     -not -path './*.egg-info' `; \
                      do
 
     depth=""

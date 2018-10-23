@@ -12,34 +12,24 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from abc import abstractmethod
+from re import search
+
+from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
+from nuage_openstack_audit.vsdclient.resources.fwaas_mixin import FWaaSMixin
+from nuage_openstack_audit.vsdclient.resources.security_groups_mixin \
+    import SecurityGroupsMixin
 
 
-class VsdClient(object):
+class VsdClient(FWaaSMixin, SecurityGroupsMixin):
 
-    def __init__(self):
-        pass
+    def __init__(self, vsd_server, user, password, enterprise, base_uri,
+                 cms_id):
 
-    @abstractmethod
-    def verify_cms(self, id):
-        pass
+        # Connect to vsp with vspk
+        version = 'v{}'.format(search(r'(\d+_\d+)', base_uri).group())
+        self.vspk_helper = VspkHelper(vsd_server, user, password, enterprise,
+                                      version, cms_id)
 
-    def get_netpartition_by_name(self, name):
-        pass
-
-    # Firewall
-
-    def get_firewalls(self, enterprise_id):
-        pass
-
-    def get_firewall_policies(self, enterprise_id):
-        pass
-
-    def get_firewall_rules(self, enterprise_id):
-        pass
-
-    def get_firewall_rules_by_policy(self, enterprise_id, os_policy_id):
-        pass
-
-    def get_firewall_rules_by_ids(self, enterprise_id, os_rule_ids):
-        pass
+        # Init all base classes here
+        FWaaSMixin.__init__(self, self.vspk_helper)
+        SecurityGroupsMixin.__init__(self, self.vspk_helper)

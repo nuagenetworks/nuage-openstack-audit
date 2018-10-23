@@ -16,85 +16,121 @@ from __future__ import print_function
 
 import logging
 
-LOG = None
+LOGGING = None
 
 
-class HeaderOne(object):
-    header = '...'
+class LoggerBase(object):
 
-    def __init__(self, s):
-        self.s = s
+    RED = '\033[91m'  # light red (red is 31)
+    GREEN = '\033[92m'  # light green (green is 32)
+    YELLOW = '\033[93m'  # light yellow (yellow is 33)
+    BLUE = '\033[94m'  # light blue (blue is 34)
+    MAGENTA = '\033[95m'  # light magenta (magenta is 35)
 
-    def __str__(self):
-        return self.header + ' ' + self.s
+    HEADER = MAGENTA
+    DEBUG = BLUE
+    EMPHASIS = GREEN
+    WARNING = YELLOW
+    FAIL = RED
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
-class HeaderTwo(HeaderOne):
-    header = HeaderOne.header + '....'
+def no_end(kwargs):
+    if 'end' in kwargs:
+        del kwargs['end']  # python logging does not support end= parameter
+    return kwargs
 
 
-class HeaderThree(HeaderTwo):
-    header = HeaderTwo.header + '....'
+class Logger(LoggerBase):
 
+    def __init__(self, verbose=False, extreme_verbose=False):
+        # verbose indicates that INFO will be copied to console,
+        # if reported (level >= INFO)
+        self.verbose = verbose or extreme_verbose
 
-class Logger(object):
-    def __init__(self):
-        self.verbose = False
-
-    @property
-    def logger(self):
-        return LOG if LOG else init_logging()
-
-    def error(self, *args):
-        self.logger.error(*args)
-        self.stdout(*args)
-        exit(1)
-
-    def warn(self, *args):
-        self.logger.warn(*args)
-
-    def user(self, *args):
-        self.stdout(*args)
-        self.logger.info(*args)
-
-    def info(self, *args):
-        if self.verbose:
-            self.user(*args)
-        else:
-            self.logger.info(*args)
-
-    def debug(self, *args):
-        self.logger.debug(*args)
+        # extreme_verbose indicates that DEBUG will be copied to console,
+        # if reported (level >= DEBUG)
+        self.extreme_verbose = extreme_verbose
 
     def set_verbose(self, verbose=True):
         self.verbose = verbose
 
+    def set_extreme_verbose(self, extreme_verbose=True):
+        self.extreme_verbose = extreme_verbose
+        if not self.verbose and extreme_verbose:
+            self.verbose = True
+
     @staticmethod
-    def stdout(*args):
-        print(args[0] if len(args) == 1
-              else str(args[0]) % tuple(arg for arg in args[1:]))
+    def init_logging(level='INFO', log_file=None):
+        global LOGGING
 
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
+            root_logger.removeHandler(handler)
 
-def init_logging(level='INFO', log_file=None):
-    global LOG
+        root_logger.setLevel(level)
 
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers:
-        root_logger.removeHandler(handler)
+        file_formatter = logging.Formatter()
+        handler = logging.FileHandler(log_file or '/dev/null')
+        handler.setFormatter(file_formatter)
+        handler.setLevel(logging.NOTSET)
+        root_logger.addHandler(handler)
 
-    root_logger.setLevel(level)
+        file_format = '%%(asctime)s %%(levelname)s %(spaces)s%%(message)s'
+        file_formatter._fmt = file_format % {'spaces': ''}
 
-    file_formatter = logging.Formatter()
-    hdlr = logging.FileHandler(log_file or '/dev/null')
-    hdlr.setFormatter(file_formatter)
-    hdlr.setLevel(logging.NOTSET)
-    root_logger.addHandler(hdlr)
+        LOGGING = logging.getLogger()
+        return LOGGING
 
-    file_format = '%%(asctime)s %%(levelname)s %(spaces)s%%(message)s'
-    file_formatter._fmt = file_format % {'spaces': ''}
+    @property
+    def logger(self):
+        return LOGGING if LOGGING else Logger.init_logging()
 
-    LOG = logging.getLogger()
-    return LOG
+    @staticmethod
+    def no_end(kwargs):
+        if 'end' in kwargs:
+            del kwargs['end']
+        return kwargs
+
+    def error(self, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(logging.ERROR):
+            self.stdout(Logger.FAIL + msg + Logger.ENDC, *args, **kwargs)
+        self.logger.error(msg, *args, **no_end(kwargs))
+        exit(1)
+
+    def warn(self, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(logging.WARN):
+            self.stdout(Logger.WARNING + msg + Logger.ENDC, *args, **kwargs)
+        self.logger.warn(msg, *args, **no_end(kwargs))
+
+    def emphasis(self, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(logging.INFO):
+            self.stdout(Reporter.EMPHASIS + msg + Reporter.ENDC,
+                        *args, **kwargs)
+        self.logger.info(msg, *args, **no_end(kwargs))
+
+    def user(self, msg, *args, **kwargs):
+        self.stdout(msg, *args, **kwargs)
+        self.logger.info(msg, *args, **no_end(kwargs))
+
+    def info(self, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(logging.INFO) and self.verbose:
+            self.stdout(msg, *args, **kwargs)
+        self.logger.info(msg, *args, **no_end(kwargs))
+
+    def debug(self, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(logging.DEBUG) and self.extreme_verbose:
+            self.stdout(Reporter.DEBUG + msg + Reporter.ENDC, *args, **kwargs)
+        self.logger.info(msg, *args, **no_end(kwargs))
+
+    @staticmethod
+    def stdout(msg, *args, **kwargs):
+        if args:
+            print(msg % tuple(args), **kwargs)
+        else:
+            print(msg, **kwargs)
 
 
 LOGGER = Logger()
@@ -102,3 +138,37 @@ LOGGER = Logger()
 
 def get_logger():
     return LOGGER
+
+
+class Reporter(LoggerBase):
+
+    def __init__(self, level='INFO'):
+        self.logger = get_logger()
+        self.level = level.lower()
+        self._report = getattr(self.logger, self.level)
+
+    def report(self, msg, *args, **kwargs):
+        self._report(msg, *args, **kwargs)
+        return self  # returning self allows for chaining, e.g.
+        #              Reporter().newline().set_color(green).h0('OK').endc()
+
+    def newline(self):
+        return self.report('')
+
+    def set_color(self, color):
+        return self.report(color, end='')
+
+    def endc(self):  # end of color
+        return self.set_color(Reporter.ENDC)
+
+    def h0(self, msg, *args, **kwargs):
+        return self.report(msg, *args, **kwargs)
+
+    def h1(self, msg, *args, **kwargs):
+        return self.report('... ' + msg, *args, **kwargs)
+
+    def h2(self, msg, *args, **kwargs):
+        return self.report('....... ' + msg, *args, **kwargs)
+
+    def h3(self, msg, *args, **kwargs):
+        return self.report('........... ' + msg, *args, **kwargs)

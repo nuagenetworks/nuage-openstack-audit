@@ -17,26 +17,34 @@ from __future__ import print_function
 import os
 import sys
 
-
-def get_env_var(name, default=None):
-    try:
-        if os.environ[name] or default is None:
-            return os.environ[name]
-        else:
-            return default
-    except KeyError:
-        if default is not None:
-            return default
-        else:
-            print('ERROR: Please set %s. Aborting.' % name)
-            exit(1)
+from nuage_openstack_audit.utils.logger import Reporter
 
 
-def get_env_bool(name, default=False):
-    return str(get_env_var(name, default)).lower() == 'true'
+class Utils(object):
 
+    @staticmethod
+    def error(*args):
+        Reporter('ERROR').report(*args)
 
-def boolean_question(question):
-    print(question + ' [y|N] ', end='')
-    answer = sys.stdin.readline().strip().lower()
-    return answer and answer == 'y'
+    @staticmethod
+    def get_env_var(name, default=None):
+        try:
+            if os.environ[name] or default is None:
+                return os.environ[name]
+            else:
+                return default
+        except KeyError:
+            if default is not None:
+                return default
+            else:
+                Utils.error('ERROR: Please set %s. Aborting.' % name)
+
+    @staticmethod
+    def get_env_bool(name, default=False):
+        return str(Utils.get_env_var(name, default)).lower() == 'true'
+
+    @staticmethod
+    def boolean_question(question):
+        print(question + ' [y|N] ', end='')
+        answer = sys.stdin.readline().strip().lower()
+        return answer and answer == 'y'
