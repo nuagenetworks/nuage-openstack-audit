@@ -19,6 +19,7 @@ import json
 import os
 import time
 
+from nuage_openstack_audit.utils.developer import DeveloperModus
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
@@ -50,6 +51,9 @@ class Main(object):
             parser.add_argument('resource', help='resource to audit',
                                 choices=['fwaas', 'all'])
             args = parser.parse_args()
+
+        if Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS'):
+            DeveloperModus()
 
         self.debug = args.debug
         self.verbose = args.verbose

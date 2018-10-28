@@ -29,4 +29,9 @@ class EntityTracker(object):
 
 
 def tracked(*args):
-    return EntityTracker(*args)
+    from nuage_openstack_audit.utils.developer import DeveloperModus
+
+    if DeveloperModus.developer_entity_tracker_enabled():
+        return DeveloperModus.tracked(*args)
+    else:
+        return EntityTracker(*args)
