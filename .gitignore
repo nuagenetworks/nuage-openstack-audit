@@ -2,7 +2,7 @@ AUTHORS
 build/
 ChangeLog
 .tox/
-nuage_openstack_auditor.egg-info/
+nuage_openstack_audit.egg-info/
 *.json
 *.log
 *.pyc
