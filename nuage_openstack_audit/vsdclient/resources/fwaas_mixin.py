@@ -27,7 +27,7 @@ class FWaaSMixin(object):
 
     def get_firewall_acl(self, ent=None, vspk_filter=None,
                          by_fw_policy_id=None):
-        """get_firewall_acl
+        """get a firewall acl.
 
         @params: enterprise object
                  vspk_filter following vspk filter structure
@@ -57,7 +57,7 @@ class FWaaSMixin(object):
 
     def get_firewall_rule(self, ent=None, vspk_filter=None,
                           by_fw_rule_id=None):
-        """get_firewall_rule
+        """get a firewall rule.
 
         @params: enterprise object
                  vspk_filter following vspk filter structure
@@ -122,9 +122,12 @@ class FWaaSMixin(object):
                         'the os policy id "{}"'.format(os_policy_id))
 
     def get_firewalls(self, ent=None):
-        Firewall = namedtuple('Firewall',
-                              'acl_external_id, domain_external_id')
-        return (Firewall(acl.external_id, domain.external_id)
+        Firewall = namedtuple(
+            'Firewall', 'acl_id acl_external_id domain_id domain_external_id')
+        return (Firewall(acl_id=acl.id,
+                         acl_external_id=acl.external_id,
+                         domain_id=domain.id,
+                         domain_external_id=domain.external_id)
                 for acl in self.get_firewall_acls(ent=ent)
                 for domain in VspkHelper.get_all(acl, "domains")
                 if domain.external_id)

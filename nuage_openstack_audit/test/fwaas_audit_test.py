@@ -22,6 +22,7 @@ import time
 from nuage_openstack_audit.main import Main
 from nuage_openstack_audit.osclient.osclient import Neutron
 from nuage_openstack_audit.osclient.osclient import OSClient
+from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
@@ -32,6 +33,8 @@ from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 #  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
 #            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
+
+WARN = Reporter('WARN')
 
 
 def header():
@@ -67,14 +70,21 @@ class FWaaSAuditTestMixin(object):
 
     @classmethod
     def _setup_cls(cls, alternate_firewall_admin_state=False):
-        class Args(object):
-            def __init__(self, resource, report, verbose, debug):
-                self.resource = resource
-                self.report = report
-                self.verbose = verbose
-                self.debug = debug
-        cls.main = Main(Args('fwaas', None, True, False))
 
+        verbose = Utils.get_env_bool('OS_AUDIT_VERBOSE')
+        extreme_verbose = Utils.get_env_bool('OS_AUDIT_EXTREME_VERBOSE')
+        log_level = Utils.get_env_var('OS_AUDIT_LOG_LEVEL', 'INFO')
+
+        WARN.h0('VERBOSE is %s, set OS_AUDIT_VERBOSE to change', verbose)
+        if verbose or extreme_verbose:
+            WARN.h0('Extreme VERBOSE is %s, set OS_AUDIT_EXTREME_VERBOSE '
+                    'to change', extreme_verbose)
+        WARN.h0('DEBUG is %s, set OS_AUDIT_LOG_LEVEL to change',
+                'debug' in log_level.lower())
+
+        cls.main = Main(Utils.TestMainArgs('fwaas',
+                                           verbose=verbose,
+                                           extreme_verbose=extreme_verbose))
         cls.routers = []
         cls.fws = []
         cls.fw_policies = []
@@ -93,8 +103,9 @@ class FWaaSAuditTestMixin(object):
             admin_state_up = True
             for f in range(cls.nr_firewalls):
                 fw_policy_rule_ids = []
-                print('Creating %d+1 rules for fw %s' % (
-                    cls.nr_rules_per_fw, f))
+                print('Creating %d+1 rules for fw %s (admin %s)' % (
+                    cls.nr_rules_per_fw, f,
+                    'up' if admin_state_up else 'down'))
                 for r in range(cls.nr_rules_per_fw):
                     rule = cls.neutron.create_firewall_rule()
                     cls.fw_rules.append(rule)
@@ -109,10 +120,10 @@ class FWaaSAuditTestMixin(object):
                 cls.fw_policies.append(policy)
                 router = cls.neutron.create_router('router')
                 cls.routers.append(router)
-                if alternate_firewall_admin_state:
-                    admin_state_up = not admin_state_up  # alternate
                 cls.fws.append(cls.neutron.create_firewall(
                     policy, router, admin_state_up))
+                if alternate_firewall_admin_state:
+                    admin_state_up = not admin_state_up  # alternate
 
     @classmethod
     def _teardown_cls(cls):

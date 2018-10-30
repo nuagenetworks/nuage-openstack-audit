@@ -21,90 +21,88 @@ from nuage_openstack_audit.utils.entity_tracker import tracked
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.timeit import TimeIt
 
-INFO = Reporter()
+INFO = Reporter('INFO')
+DEBUG = Reporter('DEBUG')
 
 
 class FWaaSAudit(Audit):
 
-    inactive_firewall_ids = set()  # firewalls that are ADMIN DOWN
-    active_policy_ids = None  # policies that do have ADMIN UP firewalls
+    inactive_firewall_ids = None  # fw ids of admin down firewalls
+    active_policy_ids = None  # policies that do have admin down firewalls
+    faked_n_policies_for_admin_down_fws = None  # faked neutron policies
     n_rule_ids_to_vsd = None  # mapping neutron rule ids to vsd rule ids
 
-    def __init__(self, neutron, vsd):
+    def __init__(self, neutron, vsd, debug):
+        super(FWaaSAudit, self).__init__(debug)
         self.neutron = neutron
         self.vsd = vsd
+
+        # initialize, so repeated unit tests don't suffer from leftovers
+        FWaaSAudit.inactive_firewall_ids = set()
+        FWaaSAudit.active_policy_ids = set()
+        FWaaSAudit.faked_n_policies_for_admin_down_fws = []
+        FWaaSAudit.n_rule_ids_to_vsd = None
 
     @TimeIt.timeit
     def audit_firewalls(self, audit_report):
         INFO.h1('Auditing firewalls')
 
-        ''' __n_policy_to_fw_r_sets__
+        ''' n_policy_to_fw_r_sets
 
-            Building a list of dicts mapping neutron FW policy ID to tuple of
-                (FW id, list of router ids)
+            List of dicts mapping
+            neutron FW policy id to (FW id, FW state, list of router ids) tuple
 
-            Remember: (FW, router)<->(FW policy) relationship is (many)<->(1)
+            BUT, for admin down FW's, we fake a new policy id ourselves
+
+            In this algorithm, remember:
+            (FW, router) <-> (FW policy) relationship is (many) <-> (1)
+
         '''
-        n_policy_to_fw_r_sets = {}
-
         n_fws = self.neutron.get_firewalls()
+        n_policy_to_fw_r_sets = {}
 
         for n_fw in n_fws:
             if n_fw['admin_state_up']:
-                p = n_policy_to_fw_r_sets.get(n_fw['firewall_policy_id'])
-                if p is None:
-                    p = n_policy_to_fw_r_sets[n_fw['firewall_policy_id']] = []
-                p.append({'firewall_id': n_fw['id'],
-                          'router_ids': set(n_fw['router_ids'])})
-            else:
-                FWaaSAudit.inactive_firewall_ids.add(n_fw['id'])
+                policy_id = n_fw['firewall_policy_id']
+                self.active_policy_ids.add(policy_id)
 
-        FWaaSAudit.active_policy_ids = set(n_policy_to_fw_r_sets.keys())
+            else:
+                self.inactive_firewall_ids.add(n_fw['id'])
+
+                # for admin down policy, we fake a policy to exist whose id
+                # is linked to the firewall id
+                self.faked_n_policies_for_admin_down_fws.append(
+                    {
+                        'id': n_fw['id'],
+                        'name': 'DROP_ALL_ACL_' + n_fw['id'],
+                        'description': 'Drop all acl for firewall %s when '
+                                       'admin_state_up=False' % n_fw['id'],
+                        'firewall_rules': []
+                    })
+                policy_id = n_fw['id']
+
+            p = n_policy_to_fw_r_sets.get(policy_id)
+            if p is None:
+                p = n_policy_to_fw_r_sets[policy_id] = []
+            p.append(
+                {
+                    'firewall_id': n_fw['id'],
+                    'firewall_admin_up': n_fw['admin_state_up'],
+                    'router_ids': set(n_fw['router_ids'])
+                })
 
         self.audit_firewall_associations(
             audit_report,
             n_fws,
             n_policy_to_fw_r_sets,
-            self.vsd.get_firewalls(),
-            excluded_vsd_policy_list=self.inactive_firewall_ids)
-
-    @staticmethod
-    def is_vsd_drop_acl_of_inactive_fw(policy):
-        return (Audit.strip_cms_id(policy.external_id)
-                in FWaaSAudit.inactive_firewall_ids)
-
-    @staticmethod
-    def is_inactive_fw_policy(policy):
-        return policy['id'] not in FWaaSAudit.active_policy_ids
-
-    @staticmethod
-    def neutron_fw_rule_ids_to_vsd_rule_ids(n_rule_ids):
-        assert FWaaSAudit.n_rule_ids_to_vsd
-        vsd_rule_ids = []
-        for rule_id in n_rule_ids:
-            vsd_rule_id = FWaaSAudit.n_rule_ids_to_vsd[rule_id]
-            if vsd_rule_id is not None:
-                vsd_rule_ids.append(vsd_rule_id)
-        return vsd_rule_ids
-
-    @TimeIt.timeit
-    def audit_firewall_policies(self, audit_report):
-        INFO.h1('Auditing firewall policies')
-        self.audit_entities(
-            audit_report,
-            self.neutron.get_firewall_policies(),
-            self.vsd.get_firewall_acls(),
-            FirewallPolicyMatcher(self.neutron_fw_rule_ids_to_vsd_rule_ids),
-            excluded_vsd_entity=self.is_vsd_drop_acl_of_inactive_fw,
-            expected_neutron_orphan=self.is_inactive_fw_policy)
+            self.vsd.get_firewalls())
 
     def audit_firewall_associations(
             self, audit_report,
-            n_firewalls,
+            n_firewalls,  # for tracking only
             n_policy_to_fw_r_sets,
-            v_fw_associated_ext_ids,
-            excluded_vsd_policy_list=None):
-        """Audits firewalls with acl-domain associations.
+            v_fw_associated_ext_ids):
+        """Audit firewalls with acl-domain associations.
 
         :param audit_report: the audit report to report to
         :param n_firewalls: iterable of neutron firewalls, only used for
@@ -113,18 +111,12 @@ class FWaaSAudit(Audit):
                list of tuples of neutron firewall id and set of router ids
         :param v_fw_associated_ext_ids: iterable over (VSD FW ACLs ext ID +
                VSD domain ext ID) tuples
-        :param excluded_vsd_policy_list: list of excluded VSD FW ACL ext IDs
         """
-        v_entities = tracked('vsd entities')
-        n_entities = tracked('neutron entities', n_firewalls)
-        n_fw_r_in_sync = tracked('neutron in sync entities')
-        n_fw_orphans = tracked('neutron orphan entities')
-        v_fw_orphans = tracked('vsd orphan entities')
+        entity_tracker = self.get_audit_entity_tracker(
+            n_entities=tracked('neutron entities', n_firewalls))
 
         ''' __the algorithm__
-                                          ~
-            Remember: (FW, router)<->(FW policy) relationship is (many)<->(1)
-                                          ~
+
             1. Loop over VSD (ACL, domain) tuples using vspk iterator
             1.1. Fetch the list of neutron (FW, set of routers) tuples for the
                  VSD ACL corresponding neutron FW policy
@@ -140,34 +132,39 @@ class FWaaSAudit(Audit):
                    is bound to this router with that policy.
             1.2. All remaining entities obtained from 1.1 are neutron orphans,
                  i.e. Firewalls in neutron which don't have a corresponding
-                 VSD (ACL, domain) combo. Unless, this was a VSD excluded ACL.
+                 VSD (ACL, domain) combo.
         '''
         initial_audit_report_len = len(audit_report)
 
         for v_fw in v_fw_associated_ext_ids:
-            v_entities += (v_fw[0], v_fw[1])
-            policy_id = self.strip_cms_id(v_fw[0])
-            router_id = self.strip_cms_id(v_fw[1])
-            fw_r_sets = n_policy_to_fw_r_sets.get(policy_id)
-            router_id_associated = False
-            if fw_r_sets:
-                # there can be many (FW, router) combos for same policy
-                for fw_r_set in fw_r_sets:
-                    if router_id in fw_r_set['router_ids']:
-                        # match; remove it from this structure
-                        fw_r_set['router_ids'].remove(router_id)
-                        if not fw_r_set['router_ids']:
-                            fw_r_sets.remove(fw_r_set)
-                            if not fw_r_sets:
-                                del n_policy_to_fw_r_sets[policy_id]
-                        router_id_associated = True
-                        n_fw_r_in_sync += fw_r_set['firewall_id']
-                        break
+            v_acl_id = v_fw.acl_id
+            v_acl_external_id = v_fw.acl_external_id
+            v_domain_id = v_fw.domain_id
+            v_domain_external_id = v_fw.domain_external_id
 
-            if (not router_id_associated and
-                    (not excluded_vsd_policy_list or
-                     self.strip_cms_id(v_fw[0]) not in
-                     excluded_vsd_policy_list)):
+            entity_tracker.v_entities += (v_acl_id, v_acl_external_id,
+                                          v_domain_id, v_domain_external_id)
+
+            policy_id = self.strip_cms_id(v_acl_external_id)
+            router_id = self.strip_cms_id(v_domain_external_id)
+
+            fw_r_sets = n_policy_to_fw_r_sets.get(policy_id) or []
+            router_id_associated = False
+
+            for fw_r_set in fw_r_sets:
+                if router_id in fw_r_set['router_ids']:
+
+                    # match; remove it from this structure
+                    fw_r_set['router_ids'].remove(router_id)
+                    if not fw_r_set['router_ids']:
+                        fw_r_sets.remove(fw_r_set)
+                        if not fw_r_sets:
+                            del n_policy_to_fw_r_sets[policy_id]
+                    router_id_associated = True
+                    entity_tracker.n_v_in_syncs += fw_r_set['firewall_id']
+                    break
+
+            if not router_id_associated:
                 # VSD ACL-router orphan :
                 # in neutron no FW is bound to this rtr with that policy
                 audit_report.append({
@@ -175,9 +172,9 @@ class FWaaSAudit(Audit):
                     'entity_type': 'Firewall',
                     'neutron_entity': None,
                     'vsd_entity': 'ACL: %s <> Domain: %s' % (
-                        v_fw[0], v_fw[1]),
+                        v_acl_id, v_domain_id),
                     'discrepancy_details': 'N/A'})
-                v_fw_orphans += v_fw[0]
+                entity_tracker.v_orphans += v_acl_id
 
         # now check the neutron orphans
         for fw_r_sets in six.itervalues(n_policy_to_fw_r_sets):
@@ -190,16 +187,51 @@ class FWaaSAudit(Audit):
                             fw_r_set['firewall_id'], r_id),
                         'vsd_entity': None,
                         'discrepancy_details': 'N/A'})
-                    n_fw_orphans += fw_r_set['firewall_id']
+                    entity_tracker.n_orphans += fw_r_set['firewall_id']
 
-        v_entities.report()
-        n_entities.report()
-        n_fw_r_in_sync.report()
-        n_fw_orphans.report()
-        v_fw_orphans.report()
+        entity_tracker.v_entities.report()
+        entity_tracker.n_entities.report()
+        entity_tracker.n_v_in_syncs.report()
+        entity_tracker.n_orphans.report()
+        entity_tracker.v_orphans.report()
 
         INFO.h2('%d discrepancies reported',
                 len(audit_report) - initial_audit_report_len)
+
+    @staticmethod
+    def is_inactive_v_fw_acl(acl):
+        return (Audit.strip_cms_id(acl.external_id)
+                in FWaaSAudit.inactive_firewall_ids)
+
+    @staticmethod
+    def is_inactive_n_fw_policy(policy):
+        return policy['id'] not in FWaaSAudit.active_policy_ids
+
+    @staticmethod
+    def neutron_fw_rule_ids_to_vsd_rule_ids(n_rule_ids):
+        assert FWaaSAudit.n_rule_ids_to_vsd
+        vsd_rule_ids = []
+        for rule_id in n_rule_ids:
+            vsd_rule_id = FWaaSAudit.n_rule_ids_to_vsd[rule_id]
+            if vsd_rule_id is not None:
+                vsd_rule_ids.append(vsd_rule_id)
+        return vsd_rule_ids
+
+    @TimeIt.timeit
+    def audit_firewall_policies(self, audit_report):
+        INFO.h1('Auditing firewall policies')
+
+        n_fw_policies = self.neutron.get_firewall_policies()
+
+        # add faked policies for inactive firewalls
+        n_fw_policies.extend(self.faked_n_policies_for_admin_down_fws)
+
+        self.audit_entities(
+            audit_report,
+            n_fw_policies,
+            self.vsd.get_firewall_acls(),
+            FirewallPolicyMatcher(self.neutron_fw_rule_ids_to_vsd_rule_ids),
+            expected_neutron_orphan=self.is_inactive_n_fw_policy)
 
     @staticmethod
     def is_fw_rule_rule_disabled(rule):

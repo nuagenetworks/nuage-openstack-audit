@@ -11,4 +11,5 @@ six
 osc_lib
 python-keystoneclient
 python-neutronclient
+recordclass
 vspk

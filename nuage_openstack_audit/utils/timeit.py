@@ -33,8 +33,8 @@ class TimeIt(object):
             ts = time.time()
             result = method(*args, **kw)
             te = time.time()
-            DEBUG.h1(
-                '%s.%s took %s secs',
+            DEBUG.h2(
+                '=== %s.%s took %s secs ===',
                 args[0].__class__.__name__, method.__name__, int(te - ts))
             return result
 

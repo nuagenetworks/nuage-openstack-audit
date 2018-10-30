@@ -21,6 +21,7 @@ from nuage_openstack_audit.utils.developer import DeveloperModus
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
+WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
 
@@ -50,15 +51,18 @@ class Main(object):
                                 choices=['fwaas', 'all'])
             args = parser.parse_args()
 
-        if Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS'):
-            DeveloperModus()
-
-        self.debug = args.debug
+        self.developer_modus = Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS')
+        self.debug = args.debug or self.developer_modus
         self.verbose = args.verbose
+        self.extreme_verbose = (hasattr(args, 'extreme_verbose') and
+                                args.extreme_verbose) or self.developer_modus
         self.report = args.report
         self.resource = args.resource
 
         self.init_logger(self.initiating_time)
+
+        if self.developer_modus:
+            DeveloperModus()
 
     def run(self):
         start_time = time.time()
@@ -74,11 +78,9 @@ class Main(object):
         # -- all audit modules come here in right sequence --
         audit_report = []
 
-        # TODO(kris) have the report file grow during the audit would be nice
-
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
-            FWaaSAudit(neutron, vsd).audit(audit_report)
+            FWaaSAudit(neutron, vsd, self.debug).audit(audit_report)
 
         # -- end --
 
@@ -92,7 +94,8 @@ class Main(object):
         from nuage_openstack_audit.osclient.osclient import OSClient
         return OSClient()
 
-    def create_vsd_client(self):
+    @staticmethod
+    def create_vsd_client():
         from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
         user, password = Utils.get_env_var('OS_VSD_SERVER_AUTH',
@@ -105,26 +108,11 @@ class Main(object):
             cms_id=Utils.get_env_var('OS_CMS_ID'),
             enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
 
-    @staticmethod
-    def expand_filename(dir_name, file_name, file_ext):
-        dir_name = os.path.expanduser(dir_name)  # expand "~"
-        dir_name = os.path.abspath(dir_name)
-        if not os.path.exists(dir_name):
-            os.makedirs(dir_name)
-        if not file_name.endswith(file_ext):
-            file_name += file_ext
-        return '%s/%s_%s' % (dir_name, 'nuage_openstack_audit', file_name)
-
-    def relative_filename(self, file_name):
-        pwd = Utils.get_env_var('PWD', 'NOTONLINUX?')
-        if file_name.startswith(pwd):
-            file_name = '.' + file_name[len(pwd):]
-        return file_name
-
     def init_logger(self, initiating_time):
         from nuage_openstack_audit.utils.logger import get_logger
         logger = get_logger()
         logger.set_verbose(self.verbose)
+        logger.set_extreme_verbose(self.extreme_verbose)
 
         env_set_level = Utils.get_env_var('OS_AUDIT_LOG_LEVEL', 'INFO').upper()
         level = 'DEBUG' if self.debug else env_set_level
@@ -140,20 +128,39 @@ class Main(object):
 
         return logger
 
-    def prep_report_name(self, suffix='report'):
+    @staticmethod
+    def expand_filename(dir_name, file_name, file_ext):
+        dir_name = os.path.expanduser(dir_name)  # expand "~"
+        dir_name = os.path.abspath(dir_name)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+        if not file_name.endswith(file_ext):
+            file_name += file_ext
+        return '%s/%s_%s' % (dir_name, 'nuage_openstack_audit', file_name)
+
+    @staticmethod
+    def relative_filename(file_name):
+        pwd = Utils.get_env_var('PWD', 'NOTONLINUX?')
+        if file_name.startswith(pwd):
+            file_name = '.' + file_name[len(pwd):]
+        return file_name
+
+    @staticmethod
+    def prep_report_name(suffix='report'):
         report_dir = Utils.get_env_var(
             'OS_AUDIT_REPORT_DIR', '.')
         fixed_report_file = Utils.get_env_var(
             'OS_AUDIT_REPORT_FILE', '')
-        return self.expand_filename(
+        return Main.expand_filename(
             report_dir, fixed_report_file or suffix, '.json')
 
-    def end_report(self, report_file, audit_report):
+    @staticmethod
+    def end_report(report_file, audit_report):
         USER.h1('Reporting %d discrepancies', len(audit_report))
         with open(report_file, 'w') as outfile:
             json.dump(audit_report, outfile, indent=4)
         USER.h0('Audit report written to %s',
-                self.relative_filename(report_file))
+                Main.relative_filename(report_file))
 
 
 def main():

@@ -21,6 +21,14 @@ from nuage_openstack_audit.utils.logger import Reporter
 
 
 class Utils(object):
+    class TestMainArgs(object):
+        def __init__(self, resource, report=None,
+                     verbose=False, extreme_verbose=False, debug=False):
+            self.resource = resource
+            self.report = report
+            self.verbose = verbose
+            self.extreme_verbose = extreme_verbose
+            self.debug = debug
 
     @staticmethod
     def error(*args):
