@@ -13,7 +13,6 @@
 #    under the License.
 
 import abc
-from recordclass import recordclass
 import six
 
 from nuage_openstack_audit.utils.entity_tracker import tracked
@@ -32,39 +31,6 @@ class Audit(object):
     @staticmethod
     def vsd_entity_to_neutron_id(vsd_entity):
         return Audit.strip_cms_id(vsd_entity.external_id)
-
-    EntityTracker = recordclass(
-        'EntityTracker', 'v_entities v_excluded_entities n_entities '
-                         'n_in_syncs n_mismatches n_expected_orphans '
-                         'n_orphans v_orphans')
-
-    @staticmethod
-    def get_audit_entity_tracker(n_entities=None,
-                                 v_entities=None,
-                                 v_excluded_entities=None,
-                                 n_in_syncs=None,
-                                 n_mismatches=None,
-                                 n_expected_orphans=None,
-                                 n_orphans=None,
-                                 v_orphans=None):
-        return Audit.EntityTracker(
-            n_entities=(n_entities if n_entities
-                        else tracked('neutron entities')),
-            v_entities=(v_entities if v_entities
-                        else tracked('vsd entities')),
-            v_excluded_entities=(v_excluded_entities if v_excluded_entities
-                                 else tracked('vsd excluded entities')),
-            n_in_syncs=(n_in_syncs if n_in_syncs
-                        else tracked('neutron/vsd in syncs entities')),
-            n_mismatches=(n_mismatches if n_mismatches
-                          else tracked('neutron mismatch entities')),
-            n_expected_orphans=(n_expected_orphans if n_expected_orphans
-                                else tracked('neutron orphan-by-design '
-                                             'entities')),
-            n_orphans=(n_orphans if n_orphans
-                       else tracked('neutron orphan entities')),
-            v_orphans=(v_orphans if v_orphans
-                       else tracked('vsd orphan entities')))
 
     def audit_entities(self, audit_report,
                        neutron_entities,
@@ -92,17 +58,23 @@ class Audit(object):
 
         initial_audit_report_len = len(audit_report)
 
-        entity_tracker = self.get_audit_entity_tracker(
-            n_entities=tracked('neutron entities', neutron_entities))
+        n_entities = tracked('neutron entities', neutron_entities)
+        v_entities = tracked('vsd entities')
+        v_excluded_entities = tracked('vsd excluded entities')
+        n_in_syncs = tracked('neutron/vsd in syncs entities')
+        n_mismatches = tracked('neutron mismatch entities')
+        n_expected_orphans = tracked('neutron orphan-by-design entities')
+        n_orphans = tracked('neutron orphan entities')
+        v_orphans = tracked('vsd orphan entities')
 
         neutron_ids_to_obj = dict([(n['id'], n) for n in neutron_entities])
 
         for v in vsd_entities:
             if excluded_vsd_entity and excluded_vsd_entity(v):
-                entity_tracker.v_excluded_entities += v
+                v_excluded_entities += v
                 continue
 
-            entity_tracker.v_entities += v
+            v_entities += v
             n_id = self.vsd_entity_to_neutron_id(v)
 
             n = neutron_ids_to_obj.get(n_id)
@@ -112,7 +84,7 @@ class Audit(object):
 
                 attr_discrepancies = entity_matcher.compare(n, v)
                 if not attr_discrepancies:
-                    entity_tracker.n_in_syncs += n
+                    n_in_syncs += n
                 else:
                     discrepancy_details = ','.join(
                         str(d) for d in attr_discrepancies)
@@ -122,7 +94,7 @@ class Audit(object):
                         'neutron_entity': n_id,
                         'vsd_entity': v.id,
                         'discrepancy_details': discrepancy_details})
-                    entity_tracker.n_mismatches += n
+                    n_mismatches += n
                 del neutron_ids_to_obj[n_id]
             else:
                 audit_report.append({
@@ -131,12 +103,12 @@ class Audit(object):
                     'neutron_entity': None,
                     'vsd_entity': v.id,
                     'discrepancy_details': 'N/A'})
-                entity_tracker.v_orphans += v
+                v_orphans += v
 
         # neutron_ids_set is now unconfirmed set of neutron id's
         for (n_id, n) in six.iteritems(neutron_ids_to_obj):
             if expected_neutron_orphan and expected_neutron_orphan(n):
-                entity_tracker.n_expected_orphans += n
+                n_expected_orphans += n
             else:
                 audit_report.append({
                     'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
@@ -144,21 +116,21 @@ class Audit(object):
                     'neutron_entity': n_id,
                     'vsd_entity': None,
                     'discrepancy_details': 'N/A'})
-                entity_tracker.n_orphans += n
+                n_orphans += n
 
         # audited entities
-        entity_tracker.v_entities.report()
+        v_entities.report()
         # don't report excludes in non-debug; they are design internal
-        entity_tracker.v_excluded_entities.report(level='DEBUG')
+        v_excluded_entities.report(level='DEBUG')
         # detailed reports
-        entity_tracker.n_entities.report()
-        entity_tracker.n_in_syncs.report()
-        entity_tracker.n_mismatches.report()
-        entity_tracker.n_expected_orphans.report()
-        entity_tracker.n_orphans.report()
-        entity_tracker.v_orphans.report()
+        n_entities.report()
+        n_in_syncs.report()
+        n_mismatches.report()
+        n_expected_orphans.report()
+        n_orphans.report()
+        v_orphans.report()
 
-        nbr_entities_in_sync = entity_tracker.n_in_syncs.count()
+        nbr_entities_in_sync = n_in_syncs.count()
 
         INFO.h2('%d discrepancies reported',
                 len(audit_report) - initial_audit_report_len)

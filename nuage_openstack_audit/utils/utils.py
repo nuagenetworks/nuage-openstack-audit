@@ -31,8 +31,9 @@ class Utils(object):
             self.debug = debug
 
     @staticmethod
-    def error(*args):
+    def env_error(*args):
         Reporter('ERROR').report(*args)
+        raise EnvironmentError
 
     @staticmethod
     def get_env_var(name, default=None):
@@ -45,7 +46,7 @@ class Utils(object):
             if default is not None:
                 return default
             else:
-                Utils.error('ERROR: Please set %s. Aborting.' % name)
+                Utils.env_error('ERROR: Please set %s. Aborting.', name)
 
     @staticmethod
     def get_env_bool(name, default=False):

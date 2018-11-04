@@ -21,6 +21,7 @@ from nuage_openstack_audit.utils.developer import DeveloperModus
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
+ERROR = Reporter('ERROR')
 WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
@@ -67,7 +68,7 @@ class Main(object):
                        else self.prep_report_name(self.initiating_time))
 
         USER.h1('Authenticating with OpenStack')
-        neutron = self.create_os_client().neutron()
+        neutron = self.create_neutron()
 
         USER.h1('Authenticating with Nuage VSD')
         vsd = self.create_vsd_client()
@@ -89,9 +90,14 @@ class Main(object):
         return audit_report, nbr_entities_in_sync
 
     @staticmethod
-    def create_os_client():
-        from nuage_openstack_audit.osclient.osclient import OSClient
-        return OSClient()
+    def create_neutron():
+        from nuage_openstack_audit.osclient.osclient import OSCredentials
+        os_credentials = OSCredentials()  # fail fast if there is env error
+
+        from nuage_openstack_audit.osclient.osclient import Keystone
+        from nuage_openstack_audit.osclient.osclient import Neutron
+
+        return Neutron(Keystone(os_credentials))
 
     @staticmethod
     def create_vsd_client():
@@ -174,7 +180,11 @@ class Main(object):
 
 
 def main():
-    Main().run()
+    try:
+        Main().run()
+
+    except EnvironmentError:
+        exit(1)
 
 
 if __name__ == '__main__':

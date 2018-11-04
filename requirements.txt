@@ -4,12 +4,10 @@
 
 pbr
 argparse
-logging
+keystoneauth1
 netaddr
-requests
 six
 osc_lib
 python-keystoneclient
 python-neutronclient
-recordclass
 vspk

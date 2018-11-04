@@ -17,13 +17,13 @@ from __future__ import division
 import functools
 import importlib
 from itertools import chain
+import logging
 from math import ceil
 
 from bambou import NURESTObject
 from bambou import NURESTSession
-from oslo_log import log
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class RecreateSessionOnTimeout(object):

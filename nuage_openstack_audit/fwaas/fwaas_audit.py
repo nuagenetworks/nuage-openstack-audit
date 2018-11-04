@@ -111,8 +111,11 @@ class FWaaSAudit(Audit):
         :param v_fw_associated_ext_ids: iterable over (VSD FW ACLs ext ID +
                VSD domain ext ID) tuples
         """
-        entity_tracker = self.get_audit_entity_tracker(
-            n_entities=tracked('neutron entities', n_firewalls))
+        n_entities = tracked('neutron entities', n_firewalls)
+        v_entities = tracked('vsd entities')
+        n_in_syncs = tracked('neutron/vsd in syncs entities')
+        n_orphans = tracked('neutron orphan entities')
+        v_orphans = tracked('vsd orphan entities')
 
         ''' __the algorithm__
 
@@ -141,8 +144,8 @@ class FWaaSAudit(Audit):
             v_domain_id = v_fw.domain_id
             v_domain_external_id = v_fw.domain_external_id
 
-            entity_tracker.v_entities += (v_acl_id, v_acl_external_id,
-                                          v_domain_id, v_domain_external_id)
+            v_entities += (v_acl_id, v_acl_external_id,
+                           v_domain_id, v_domain_external_id)
 
             policy_id = self.strip_cms_id(v_acl_external_id)
             router_id = self.strip_cms_id(v_domain_external_id)
@@ -160,7 +163,7 @@ class FWaaSAudit(Audit):
                         if not fw_r_sets:
                             del n_policy_to_fw_r_sets[policy_id]
                     router_id_associated = True
-                    entity_tracker.n_in_syncs += fw_r_set['firewall_id']
+                    n_in_syncs += fw_r_set['firewall_id']
                     break
 
             if not router_id_associated:
@@ -173,7 +176,7 @@ class FWaaSAudit(Audit):
                     'vsd_entity': 'ACL: %s <> Domain: %s' % (
                         v_acl_id, v_domain_id),
                     'discrepancy_details': 'N/A'})
-                entity_tracker.v_orphans += v_acl_id
+                v_orphans += v_acl_id
 
         # now check the neutron orphans
         for fw_r_sets in six.itervalues(n_policy_to_fw_r_sets):
@@ -186,18 +189,18 @@ class FWaaSAudit(Audit):
                             fw_r_set['firewall_id'], r_id),
                         'vsd_entity': None,
                         'discrepancy_details': 'N/A'})
-                    entity_tracker.n_orphans += fw_r_set['firewall_id']
+                    n_orphans += fw_r_set['firewall_id']
 
-        entity_tracker.v_entities.report()
-        entity_tracker.n_entities.report()
-        entity_tracker.n_in_syncs.report()
-        entity_tracker.n_orphans.report()
-        entity_tracker.v_orphans.report()
+        v_entities.report()
+        n_entities.report()
+        n_in_syncs.report()
+        n_orphans.report()
+        v_orphans.report()
 
         INFO.h2('%d discrepancies reported',
                 len(audit_report) - initial_audit_report_len)
 
-        return entity_tracker.n_in_syncs.count()
+        return n_in_syncs.count()
 
     @staticmethod
     def is_inactive_v_fw_acl(acl):

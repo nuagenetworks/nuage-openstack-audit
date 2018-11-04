@@ -13,11 +13,11 @@
 #    under the License.
 
 from collections import namedtuple
-from oslo_log import log
+import logging
 
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class FWaaSMixin(object):

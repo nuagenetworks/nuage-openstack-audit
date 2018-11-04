@@ -98,7 +98,6 @@ class Logger(LoggerBase):
         if self.logger.isEnabledFor(logging.ERROR):
             self.stdout(Logger.FAIL + msg + Logger.ENDC, *args, **kwargs)
         self.logger.error(msg, *args, **no_end(kwargs))
-        exit(1)
 
     def warn(self, msg, *args, **kwargs):
         if self.logger.isEnabledFor(logging.WARN):

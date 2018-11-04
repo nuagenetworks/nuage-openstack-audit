@@ -16,15 +16,21 @@ from __future__ import print_function
 
 import functools
 import mock
+import six
 import testtools
 import time
 
-from nuage_openstack_audit.main import Main
-from nuage_openstack_audit.osclient.osclient import Neutron
-from nuage_openstack_audit.osclient.osclient import OSClient
+# system under test
+from nuage_openstack_audit.main import Main  # under test
+from nuage_openstack_audit.osclient.osclient import Neutron  # for mocking
+from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
+
+# test code
+from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
+from nuage_openstack_audit.osclient.osclient import Keystone  # reused
+from nuage_openstack_audit.test.neutron_test import NeutronTest
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
-from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/fwaas_audit_test.py
@@ -60,17 +66,19 @@ def header():
     def decorator(f):
         @functools.wraps(f)
         def wrapper(self, *func_args, **func_kwargs):
-            if f.func_code.co_name != 'wrapper':
+            if six.get_function_code(f).co_name != 'wrapper':
                 # make sure there is at least 1 sec in between tests such that
                 # report file is different
                 time.sleep(1)
-                print("\n=== START of {} ===".format(f.func_code.co_name))
+                print("\n=== START of {} ===".format(
+                    six.get_function_code(f).co_name))
             start_time = time.time()
             result = f(self, *func_args, **func_kwargs)
             exec_time = int(time.time() - start_time)
-            if f.func_code.co_name != 'wrapper':
+            if six.get_function_code(f).co_name != 'wrapper':
                 print("=== Execution time = {} SECS ===".format(exec_time))
-                print("=== END of {} ===".format(f.func_code.co_name))
+                print("=== END of {} ===".format(
+                    six.get_function_code(f).co_name))
             return result
         return wrapper
     return decorator
@@ -121,7 +129,7 @@ class FirewallAuditBase(testtools.TestCase):
                                     cls.nbr_enabled_rules_per_fw)
         cls.nbr_fw_rules = cls.nbr_firewalls * cls.nbr_rules_per_fw
 
-        cls.neutron = OSClient().neutron()  # for building up test resources
+        cls.neutron = NeutronTest(Keystone(OSCredentials()))
 
         print('\n===== Start of tests (%s) =====' % cls.__name__)
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
@@ -193,7 +201,7 @@ class FirewallAuditBase(testtools.TestCase):
     def assertEqual(self, expected, observed, message=''):
         if expected != observed:
             Reporter('WARN').report(
-                'FAIL: expected %s, got %d', expected, observed)
+                'FAIL: expected {}, got {}'.format(expected, observed))
         super(FirewallAuditBase, self).assertEqual(
             expected, observed, message)
 
