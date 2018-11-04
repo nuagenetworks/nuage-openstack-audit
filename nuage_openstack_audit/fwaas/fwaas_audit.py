@@ -32,8 +32,7 @@ class FWaaSAudit(Audit):
     faked_n_policies_for_admin_down_fws = None  # faked neutron policies
     n_rule_ids_to_vsd = None  # mapping neutron rule ids to vsd rule ids
 
-    def __init__(self, neutron, vsd, debug):
-        super(FWaaSAudit, self).__init__(debug)
+    def __init__(self, neutron, vsd):
         self.neutron = neutron
         self.vsd = vsd
 
@@ -41,7 +40,7 @@ class FWaaSAudit(Audit):
         FWaaSAudit.inactive_firewall_ids = set()
         FWaaSAudit.active_policy_ids = set()
         FWaaSAudit.faked_n_policies_for_admin_down_fws = []
-        FWaaSAudit.n_rule_ids_to_vsd = None
+        FWaaSAudit.n_rule_ids_to_vsd = {}
 
     @TimeIt.timeit
     def audit_firewalls(self, audit_report):
@@ -91,7 +90,7 @@ class FWaaSAudit(Audit):
                     'router_ids': set(n_fw['router_ids'])
                 })
 
-        self.audit_firewall_associations(
+        return self.audit_firewall_associations(
             audit_report,
             n_fws,
             n_policy_to_fw_r_sets,
@@ -161,7 +160,7 @@ class FWaaSAudit(Audit):
                         if not fw_r_sets:
                             del n_policy_to_fw_r_sets[policy_id]
                     router_id_associated = True
-                    entity_tracker.n_v_in_syncs += fw_r_set['firewall_id']
+                    entity_tracker.n_in_syncs += fw_r_set['firewall_id']
                     break
 
             if not router_id_associated:
@@ -191,12 +190,14 @@ class FWaaSAudit(Audit):
 
         entity_tracker.v_entities.report()
         entity_tracker.n_entities.report()
-        entity_tracker.n_v_in_syncs.report()
+        entity_tracker.n_in_syncs.report()
         entity_tracker.n_orphans.report()
         entity_tracker.v_orphans.report()
 
         INFO.h2('%d discrepancies reported',
                 len(audit_report) - initial_audit_report_len)
+
+        return entity_tracker.n_in_syncs.count()
 
     @staticmethod
     def is_inactive_v_fw_acl(acl):
@@ -212,7 +213,7 @@ class FWaaSAudit(Audit):
         assert FWaaSAudit.n_rule_ids_to_vsd
         vsd_rule_ids = []
         for rule_id in n_rule_ids:
-            vsd_rule_id = FWaaSAudit.n_rule_ids_to_vsd[rule_id]
+            vsd_rule_id = FWaaSAudit.n_rule_ids_to_vsd.get(rule_id)
             if vsd_rule_id is not None:
                 vsd_rule_ids.append(vsd_rule_id)
         return vsd_rule_ids
@@ -226,12 +227,14 @@ class FWaaSAudit(Audit):
         # add faked policies for inactive firewalls
         n_fw_policies.extend(self.faked_n_policies_for_admin_down_fws)
 
-        self.audit_entities(
+        in_syncs = self.audit_entities(
             audit_report,
             n_fw_policies,
             self.vsd.get_firewall_acls(),
             FirewallPolicyMatcher(self.neutron_fw_rule_ids_to_vsd_rule_ids),
             expected_neutron_orphan=self.is_inactive_n_fw_policy)
+
+        return in_syncs
 
     @staticmethod
     def is_fw_rule_rule_disabled(rule):
@@ -241,14 +244,21 @@ class FWaaSAudit(Audit):
     def audit_firewall_rules(self, audit_report):
         INFO.h1('Auditing firewall rules')
 
-        FWaaSAudit.n_rule_ids_to_vsd = self.audit_entities(
+        in_syncs = self.audit_entities(
             audit_report,
             self.neutron.get_firewall_rules(),
             self.vsd.get_firewall_rules(),
             FirewallRuleMatcher(),
-            expected_neutron_orphan=self.is_fw_rule_rule_disabled)
+            expected_neutron_orphan=self.is_fw_rule_rule_disabled,
+            neutron_id_to_vsd_ids_dict=FWaaSAudit.n_rule_ids_to_vsd)
+
+        return in_syncs
 
     def audit(self, audit_report):
-        self.audit_firewalls(audit_report)
-        self.audit_firewall_rules(audit_report)
-        self.audit_firewall_policies(audit_report)
+        nbr_entities_in_sync = 0
+
+        nbr_entities_in_sync += self.audit_firewalls(audit_report)
+        nbr_entities_in_sync += self.audit_firewall_rules(audit_report)
+        nbr_entities_in_sync += self.audit_firewall_policies(audit_report)
+
+        return nbr_entities_in_sync

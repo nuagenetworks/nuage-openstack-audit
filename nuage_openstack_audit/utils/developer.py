@@ -14,7 +14,6 @@
 
 from nuage_openstack_audit.utils.entity_tracker \
     import set_listing_entity_tracker_as_default
-from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.timeit import TimeIt
 
 
@@ -28,4 +27,3 @@ class DeveloperModus(object):
 
         set_listing_entity_tracker_as_default(True)
         TimeIt.enable(True)
-        Reporter('WARN').report('Developer modus is on')

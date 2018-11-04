@@ -27,10 +27,11 @@ LOG = log.getLogger(__name__)
 
 
 class RecreateSessionOnTimeout(object):
-    """"Decorator class to automatically re-authenticate when session expires.
+    """Decorator class to automatically re-authenticate when session expires.
 
     Warning: Not thread-safe (yet)
     """
+
     def __init__(self, method):
         self.method = method
         self.renewing = False
@@ -58,7 +59,7 @@ NURESTObject.send_request = RecreateSessionOnTimeout(NURESTObject.send_request)
 
 
 class VspkHelper(object):
-    """Helper class for interfacing with vspk"""
+    """Helper class for interfacing with vspk."""
 
     def __init__(self, vsd_server, user, password,
                  enterprise, vspk_version, cms_id):
@@ -91,8 +92,7 @@ class VspkHelper(object):
 
     @staticmethod
     def get_all(parent, fetcher_str, **kwargs):
-        """
-        Get all objects, abstracting away vsd paging
+        """Get all objects, abstracting away vsd paging.
 
         :param parent: parent vspk object
         :param fetcher_str: name of attribute to fetch from parent
@@ -101,12 +101,11 @@ class VspkHelper(object):
 
         TODO this should be moved to vspk
         """
-
         # overwrite parameters that may interfere
         kwargs.update({'commit': True, 'page': 0})
 
         def generate_all_pages():
-            """generator for all pages"""
+            """generator for all pages."""
             fetcher = getattr(parent, fetcher_str)
 
             first_page = fetcher.get(**kwargs)
@@ -126,15 +125,14 @@ class VspkHelper(object):
     @classmethod
     def get_all_by_field(cls, parent, fetcher_str, field_name,
                          field_values, **kwargs):
-        """
-        Get all objects which have field_name in field_values
+        """Get all objects which have field_name in field_values.
 
         :param parent: parent vspk object
         :param fetcher_str: name of attribute to fetch from parent
         :param field_name: field for which we want to filter
         :param field_values: filter values
         :param kwargs: extra arguments for fetcher.get
-        :return:
+        :return: chain from iterable of retrieved objects
         """
         if 'filter' in kwargs:
             raise NotImplementedError("Additional filter not supported")
@@ -142,7 +140,7 @@ class VspkHelper(object):
         # Selective fetching of objects from the VSD is possible using the
         # X-Nuage-Filter header. This header is sent in a GET request for which
         # the max header size is limited (currently 8K). In order to not exceed
-        # this value, it was decided to, for now, default it to 50
+        # this value, it was decided to, for now, default it to 50.
         filters = cls._chunked_match_any_filter(field_name, field_values,
                                                 max_values_per_chunk=50)
 
@@ -152,7 +150,7 @@ class VspkHelper(object):
 
     @classmethod
     def _chunked_match_any_filter(cls, field, values, max_values_per_chunk):
-        # TODO X-Nuage-Filter supports 'IN {..}' for newer vsd versions
+        # TODO(Glenn) X-Nuage-Filter supports 'IN {..}' for newer vsd versions
         if not values:
             yield None
         else:
@@ -162,6 +160,6 @@ class VspkHelper(object):
 
     @staticmethod
     def _chunkify(sequence, chunksize):
-        """Yield successive chunks from `sequence`"""
+        """Yield successive chunks from `sequence`."""
         for i in range(0, len(sequence), chunksize):
             yield sequence[i:i + chunksize]

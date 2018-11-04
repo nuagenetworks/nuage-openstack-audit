@@ -51,7 +51,7 @@ class Main(object):
                                 choices=['fwaas', 'all'])
             args = parser.parse_args()
 
-        self.developer_modus = Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS')
+        self.developer_modus = self.check_developer_modus()
         self.debug = args.debug or self.developer_modus
         self.verbose = args.verbose
         self.extreme_verbose = (hasattr(args, 'extreme_verbose') and
@@ -60,9 +60,6 @@ class Main(object):
         self.resource = args.resource
 
         self.init_logger(self.initiating_time)
-
-        if self.developer_modus:
-            DeveloperModus()
 
     def run(self):
         start_time = time.time()
@@ -77,17 +74,19 @@ class Main(object):
 
         # -- all audit modules come here in right sequence --
         audit_report = []
+        nbr_entities_in_sync = 0
 
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
-            FWaaSAudit(neutron, vsd, self.debug).audit(audit_report)
+            nbr_entities_in_sync += \
+                FWaaSAudit(neutron, vsd).audit(audit_report)
 
         # -- end --
 
-        self.end_report(report_file, audit_report)
+        self.end_report(report_file, audit_report, nbr_entities_in_sync)
 
         INFO.h0('Audit complete in %d secs', int(time.time() - start_time))
-        return audit_report
+        return audit_report, nbr_entities_in_sync
 
     @staticmethod
     def create_os_client():
@@ -124,9 +123,19 @@ class Main(object):
 
         logger.init_logging(level, log_file)
         USER.h0('Logfile created at %s', self.relative_filename(log_file))
-        INFO.h0('Tracing is %s', level)
-
+        if self.developer_modus:
+            WARN.report('Developer modus is on')
+        else:
+            INFO.h0('Tracing is %s', level)
         return logger
+
+    @staticmethod
+    def check_developer_modus():
+        if Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS'):
+            DeveloperModus()
+            return True
+        else:
+            return False
 
     @staticmethod
     def expand_filename(dir_name, file_name, file_ext):
@@ -155,7 +164,8 @@ class Main(object):
             report_dir, fixed_report_file or suffix, '.json')
 
     @staticmethod
-    def end_report(report_file, audit_report):
+    def end_report(report_file, audit_report, nbr_entities_in_sync):
+        INFO.h1('Found %d entities in sync', nbr_entities_in_sync)
         USER.h1('Reporting %d discrepancies', len(audit_report))
         with open(report_file, 'w') as outfile:
             json.dump(audit_report, outfile, indent=4)
