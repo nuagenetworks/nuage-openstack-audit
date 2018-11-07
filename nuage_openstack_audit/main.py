@@ -162,10 +162,8 @@ class Main(object):
 
     @staticmethod
     def prep_report_name(suffix='report'):
-        report_dir = Utils.get_env_var(
-            'OS_AUDIT_REPORT_DIR', '.')
-        fixed_report_file = Utils.get_env_var(
-            'OS_AUDIT_REPORT_FILE', '')
+        report_dir = Utils.get_env_var('OS_AUDIT_REPORT_DIR', '.')
+        fixed_report_file = Utils.get_env_var('OS_AUDIT_REPORT_FILE', '')
         return Main.expand_filename(
             report_dir, fixed_report_file or suffix, '.json')
 

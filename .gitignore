@@ -1,6 +1,9 @@
 AUTHORS
 build/
 ChangeLog
+dist/
+local/
+venv/
 .tox/
 nuage_openstack_audit.egg-info/
 *.json
