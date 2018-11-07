@@ -67,11 +67,13 @@ class Main(object):
         report_file = (self.report if self.report
                        else self.prep_report_name(self.initiating_time))
 
+        cms_id = Utils.get_env_var('OS_CMS_ID')
+
         USER.h1('Authenticating with OpenStack')
         neutron = self.create_neutron()
 
         USER.h1('Authenticating with Nuage VSD')
-        vsd = self.create_vsd_client()
+        vsd = self.create_vsd_client(cms_id)
 
         # -- all audit modules come here in right sequence --
         audit_report = []
@@ -80,7 +82,7 @@ class Main(object):
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
             nbr_entities_in_sync += \
-                FWaaSAudit(neutron, vsd).audit(audit_report)
+                FWaaSAudit(neutron, vsd, cms_id).audit(audit_report)
 
         # -- end --
 
@@ -100,7 +102,7 @@ class Main(object):
         return Neutron(Keystone(os_credentials))
 
     @staticmethod
-    def create_vsd_client():
+    def create_vsd_client(cms_id):
         from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
         user, password = Utils.get_env_var('OS_VSD_SERVER_AUTH',
@@ -110,7 +112,7 @@ class Main(object):
             user=user,
             password=password,
             base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
-            cms_id=Utils.get_env_var('OS_CMS_ID'),
+            cms_id=cms_id,
             enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
 
     def init_logger(self, initiating_time):

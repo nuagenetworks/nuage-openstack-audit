@@ -24,9 +24,23 @@ DEBUG = Reporter('DEBUG')
 
 class Audit(object):
 
+    def __init__(self, cms_id):
+        self.cms_id = cms_id
+
+    @staticmethod
+    def get_cms_id(external_id):
+        split_ext_id = external_id.split('@') if external_id else []
+        return split_ext_id[1] if len(split_ext_id) > 1 else None
+
     @staticmethod
     def strip_cms_id(external_id):
         return external_id.split('@')[0] if external_id else external_id
+
+    # ---
+
+    @staticmethod
+    def get_vsd_entity_cms_id(vsd_entity):
+        return Audit.get_cms_id(vsd_entity.external_id)
 
     @staticmethod
     def vsd_entity_to_neutron_id(vsd_entity):
@@ -70,6 +84,9 @@ class Audit(object):
         neutron_ids_to_obj = dict([(n['id'], n) for n in neutron_entities])
 
         for v in vsd_entities:
+            if Audit.get_vsd_entity_cms_id(v) != self.cms_id:
+                continue  # don't bother if cms id does not match
+
             if excluded_vsd_entity and excluded_vsd_entity(v):
                 v_excluded_entities += v
                 continue

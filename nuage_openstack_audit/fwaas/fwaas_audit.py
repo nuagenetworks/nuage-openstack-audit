@@ -32,7 +32,9 @@ class FWaaSAudit(Audit):
     faked_n_policies_for_admin_down_fws = None  # faked neutron policies
     n_rule_ids_to_vsd = None  # mapping neutron rule ids to vsd rule ids
 
-    def __init__(self, neutron, vsd):
+    def __init__(self, neutron, vsd, cms_id):
+        super(FWaaSAudit, self).__init__(cms_id)
+
         self.neutron = neutron
         self.vsd = vsd
 
