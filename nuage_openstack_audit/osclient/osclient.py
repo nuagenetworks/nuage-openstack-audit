@@ -115,3 +115,33 @@ class Neutron(object):
     @TimeIt.timeit
     def get_firewall_rules(self):
         return self.client.list_firewall_rules()['firewall_rules']
+
+    @TimeIt.timeit
+    def get_routers(self):
+        return self.client.list_routers()['routers']
+
+    @TimeIt.timeit
+    def get_networks(self, filters=None, fields=None):
+        kwargs = {}
+        if filters:
+            kwargs = filters
+        if fields:
+            kwargs['fields'] = fields
+        return self.client.list_networks(**kwargs)['networks']
+
+    @TimeIt.timeit
+    def get_subnets(self):
+        return self.client.list_subnets()['subnets']
+
+    @TimeIt.timeit
+    def get_ports(self, filters=None, fields=None):
+        kwargs = {}
+        if filters:
+            kwargs = filters
+        if fields:
+            kwargs['fields'] = fields
+        return self.client.list_ports(**kwargs)['ports']
+
+    @TimeIt.timeit
+    def get_security_group(self, sg_id):
+        return self.client.show_security_group(sg_id)['security_group']

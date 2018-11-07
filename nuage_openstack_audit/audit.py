@@ -25,7 +25,7 @@ DEBUG = Reporter('DEBUG')
 class Audit(object):
 
     def __init__(self, cms_id):
-        self.vspk_filter = 'externalID ENDSWITH \'@' + cms_id + '\''
+        self.vspk_filter = "externalID ENDSWITH '@{}'".format(cms_id)
 
     @staticmethod
     def get_cms_id(external_id):
@@ -46,10 +46,15 @@ class Audit(object):
     def vsd_entity_to_neutron_id(vsd_entity):
         return Audit.strip_cms_id(vsd_entity.external_id)
 
+    @staticmethod
+    def _default_get_ext_id(neutron_entity):
+        return neutron_entity['id']
+
     def audit_entities(self, audit_report,
                        neutron_entities,
                        vsd_entities,
                        entity_matcher,
+                       external_id_getter=None,
                        excluded_vsd_entity=None,
                        expected_neutron_orphan=None,
                        neutron_id_to_vsd_ids_dict=None,
@@ -64,6 +69,8 @@ class Audit(object):
                the VSD audit. If None, not applicable.
         :param expected_neutron_orphan: function used to exclude entities from
                the neutron orphan audit. If None, not applicable.
+        :param external_id_getter: Function that takes a neutron_entity and
+                                   returns the external id (without CMS ID).
         :param neutron_id_to_vsd_ids_dict: if passed, this dict is filled with
                neutron id to vsd id mappings
         :param on_in_sync: function used to verify resource further upon
@@ -85,59 +92,66 @@ class Audit(object):
         n_orphans = tracked('neutron orphan entities')
         v_orphans = tracked('vsd orphan entities')
 
-        neutron_ids_to_obj = dict([(n['id'], n) for n in neutron_entities])
+        if not external_id_getter:
+            external_id_getter = self._default_get_ext_id
 
-        for v in vsd_entities:
+        neutron_ids_to_obj = {
+            external_id_getter(neutron_entity): neutron_entity
+            for neutron_entity in neutron_entities}
 
-            if excluded_vsd_entity and excluded_vsd_entity(v):
-                v_excluded_entities += v
+        for vsd_entity in vsd_entities:
+
+            if excluded_vsd_entity and excluded_vsd_entity(vsd_entity):
+                v_excluded_entities += vsd_entity
                 continue
 
-            v_entities += v
-            n_id = self.vsd_entity_to_neutron_id(v)
+            v_entities += vsd_entity
+            neutron_id = self.vsd_entity_to_neutron_id(vsd_entity)
 
-            n = neutron_ids_to_obj.get(n_id)
-            if n:
+            neutron_entity = neutron_ids_to_obj.get(neutron_id)
+            if neutron_entity:
                 if neutron_id_to_vsd_ids_dict is not None:
-                    neutron_id_to_vsd_ids_dict[n_id] = v.id
+                    neutron_id_to_vsd_ids_dict[neutron_id] = vsd_entity.id
 
-                attr_discrepancies = entity_matcher.compare(n, v)
+                attr_discrepancies = list(
+                    entity_matcher.compare(neutron_entity, vsd_entity))
                 if not attr_discrepancies:
-                    n_in_syncs += n
+                    n_in_syncs += neutron_entity
                     if on_in_sync:
-                        on_in_sync(v, n)
+                        on_in_sync(vsd_entity, neutron_entity)
                 else:
                     discrepancy_details = ','.join(
                         str(d) for d in attr_discrepancies)
                     audit_report.append({
                         'discrepancy_type': 'ENTITY_MISMATCH',
                         'entity_type': entity_matcher.entity_name(),
-                        'neutron_entity': n_id,
-                        'vsd_entity': v.id,
+                        'neutron_entity': neutron_id,
+                        'vsd_entity': vsd_entity.id,
                         'discrepancy_details': discrepancy_details})
-                    n_mismatches += n
-                del neutron_ids_to_obj[n_id]
+                    n_mismatches += neutron_entity
+                del neutron_ids_to_obj[neutron_id]
             else:
                 audit_report.append({
                     'discrepancy_type': 'ORPHAN_VSD_ENTITY',
                     'entity_type': entity_matcher.entity_name(),
                     'neutron_entity': None,
-                    'vsd_entity': v.id,
+                    'vsd_entity': vsd_entity.id,
                     'discrepancy_details': 'N/A'})
-                v_orphans += v
+                v_orphans += vsd_entity
 
         # neutron_ids_set is now unconfirmed set of neutron id's
-        for (n_id, n) in six.iteritems(neutron_ids_to_obj):
-            if expected_neutron_orphan and expected_neutron_orphan(n):
-                n_expected_orphans += n
+        for (neutron_id, neutron_entity) in six.iteritems(neutron_ids_to_obj):
+            if (expected_neutron_orphan and
+                    expected_neutron_orphan(neutron_entity)):
+                n_expected_orphans += neutron_entity
             else:
                 audit_report.append({
                     'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
                     'entity_type': entity_matcher.entity_name(),
-                    'neutron_entity': n_id,
+                    'neutron_entity': neutron_id,
                     'vsd_entity': None,
                     'discrepancy_details': 'N/A'})
-                n_orphans += n
+                n_orphans += neutron_entity
 
         # audited entities
         v_entities.report()
@@ -161,5 +175,5 @@ class Audit(object):
         return nbr_entities_in_sync
 
     @abc.abstractmethod
-    def audit(self, audit_report):
+    def audit(self, *args, **kwargs):
         pass

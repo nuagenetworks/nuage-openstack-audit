@@ -259,11 +259,12 @@ class FWaaSAudit(Audit):
 
         return in_syncs
 
-    def audit(self, audit_report):
+    def audit(self):
+        audit_report = []
         nbr_entities_in_sync = 0
 
         nbr_entities_in_sync += self.audit_firewalls(audit_report)
         nbr_entities_in_sync += self.audit_firewall_rules(audit_report)
         nbr_entities_in_sync += self.audit_firewall_policies(audit_report)
 
-        return nbr_entities_in_sync
+        return audit_report, nbr_entities_in_sync

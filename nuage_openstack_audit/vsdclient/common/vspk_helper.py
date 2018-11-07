@@ -92,6 +92,9 @@ class VspkHelper(object):
     def get_default_enterprise(self):
         return self.default_enterprise
 
+    def get_user(self):
+        return self._session.user
+
     def get_external_id(self, os_id):
         return '{}@{}'.format(os_id, self.cms_id)
 

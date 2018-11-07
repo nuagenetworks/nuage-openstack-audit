@@ -13,6 +13,7 @@
 #    under the License.
 
 import os
+from oslo_utils import uuidutils
 
 
 class Utils(object):
@@ -45,3 +46,7 @@ class Utils(object):
     @staticmethod
     def get_env_bool(name, default=False):
         return str(Utils.get_env_var(name, default)).lower() == 'true'
+
+    @staticmethod
+    def is_uuid(uuid):
+        return uuidutils.is_uuid_like(uuid)

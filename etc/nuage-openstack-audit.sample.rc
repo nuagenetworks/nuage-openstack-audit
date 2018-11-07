@@ -53,3 +53,7 @@ export OS_DEFAULT_NETPARTITION=changeme
 
 # default OS_VSD_BASE_URI is '/nuage/api/v5_0'
 # export OS_VSD_BASE_URI=/nuage/api/v5_0
+
+# default device_owner_prefix is []
+# export OS_DEVICE_OWNER_PREFIX=[]
+

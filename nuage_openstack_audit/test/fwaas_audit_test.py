@@ -14,11 +14,9 @@
 
 from __future__ import print_function
 
-import functools
 import mock
-import six
 import testtools
-import time
+from nuage_openstack_audit.test.utils.decorators import header
 
 # system under test
 from nuage_openstack_audit.main import Main  # under test
@@ -28,7 +26,8 @@ from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 # test code
 from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
 from nuage_openstack_audit.osclient.osclient import Keystone  # reused
-from nuage_openstack_audit.test.neutron_test_helper import NeutronTestHelper
+from nuage_openstack_audit.test.utils.neutron_test_helper \
+    import NeutronTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
@@ -60,28 +59,6 @@ else:
                 'debug' in log_level.lower())
 USER.set_color(USER.ENDC).newline()
 # -----------------------------------------------------------------------------
-
-
-def header():
-    def decorator(f):
-        @functools.wraps(f)
-        def wrapper(self, *func_args, **func_kwargs):
-            if six.get_function_code(f).co_name != 'wrapper':
-                # make sure there is at least 1 sec in between tests such that
-                # report file is different
-                time.sleep(1)
-                print("\n=== START of {} ===".format(
-                    six.get_function_code(f).co_name))
-            start_time = time.time()
-            result = f(self, *func_args, **func_kwargs)
-            exec_time = int(time.time() - start_time)
-            if six.get_function_code(f).co_name != 'wrapper':
-                print("=== Execution time = {} SECS ===".format(exec_time))
-                print("=== END of {} ===".format(
-                    six.get_function_code(f).co_name))
-            return result
-        return wrapper
-    return decorator
 
 
 def get_nbr_firewalls_under_test():

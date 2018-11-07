@@ -47,12 +47,9 @@ class Matcher(object):
             return result
 
     def compare(self, neutron_obj, vsd_obj):
-        v_n = self.map_neutron_to_vsd(neutron_obj)
-        attr_discrepancies = []
-        for k in six.iterkeys(v_n):
-            v_n_k = v_n[k]
-            vsd_o_k = getattr(vsd_obj, k)
-            if str(v_n_k) != str(vsd_o_k):
-                attr_discrepancies.append((k, '{} != {}'.format(
-                    v_n_k, vsd_o_k)))
-        return attr_discrepancies
+        mapped_vsd_obj = self.map_neutron_to_vsd(neutron_obj)
+        for attr_name, mapped_value in six.iteritems(mapped_vsd_obj):
+            original_value = getattr(vsd_obj, attr_name)
+            if str(mapped_value) != str(original_value):
+                yield (attr_name, '{} != {}'.format(mapped_value,
+                                                    original_value))

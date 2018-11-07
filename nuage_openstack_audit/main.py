@@ -51,7 +51,7 @@ class Main(object):
             parser.add_argument('-o', '--report', help='report file',
                                 default=None)
             parser.add_argument('resource', help='resource to audit',
-                                choices=['fwaas', 'all'])
+                                choices=['fwaas', 'security_group', 'all'])
             args = parser.parse_args()
 
         self.developer_modus = self.check_developer_modus()
@@ -83,9 +83,18 @@ class Main(object):
 
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
-            nbr_entities_in_sync += FWaaSAudit(neutron, vsd, cms_id).audit(
-                audit_report)
+            fwaas_audit_report, fwaas_in_sync_cnt = FWaaSAudit(
+                neutron, vsd, cms_id).audit()
+            audit_report += fwaas_audit_report
+            nbr_entities_in_sync += fwaas_in_sync_cnt
 
+        if 'security_group' in self.resource or 'all' in self.resource:
+            from nuage_openstack_audit.security_group.security_group_audit \
+                import SecurityGroupAudit
+            sg_audit_report, sg_in_sync_cnt = SecurityGroupAudit(
+                neutron, vsd, cms_id).audit()
+            audit_report += sg_audit_report
+            nbr_entities_in_sync += sg_in_sync_cnt
         # -- end --
 
         self.end_report(report_file, audit_report, nbr_entities_in_sync)

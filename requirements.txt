@@ -8,6 +8,7 @@ keystoneauth1
 netaddr
 six
 osc_lib
+oslo_utils
 python-keystoneclient
 python-neutronclient
 vspk>=5.3.3

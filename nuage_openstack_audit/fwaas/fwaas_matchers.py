@@ -15,17 +15,8 @@
 import netaddr
 
 from nuage_openstack_audit.utils.matcher import Matcher
+from nuage_openstack_audit.vsdclient.common import constants
 
-
-IPV4_ETHERTYPE = '0x0800'
-IPV6_ETHERTYPE = '0x86DD'
-
-PROTOCOL_NAME_TO_NUM = {
-    'tcp': 6,
-    'udp': 17,
-    'icmp': 1,
-    'icmpv6': 58
-}
 
 OS_ACTION_TO_VSD_ACTION = {
     'allow': 'FORWARD',
@@ -38,9 +29,10 @@ OS_ACTION_TO_VSD_STATEFUL = {
 }
 
 OS_IPVERSION_TO_VSD_ETHERTYPE = {
-    4: IPV4_ETHERTYPE,
-    6: IPV6_ETHERTYPE
+    4: constants.VSP_IPV4_ETHERTYPE,
+    6: constants.VSP_IPV6_ETHERTYPE
 }
+
 
 OS_FWAAS_RULES_TO_VSD = None
 
@@ -88,7 +80,7 @@ class FirewallRuleMatcher(Matcher):
             ],
             'protocol': [
                 ('protocol',
-                 lambda x: PROTOCOL_NAME_TO_NUM.get(x, 'ANY'))
+                 lambda x: constants.PROTOCOL_NAME_TO_NUM.get(x, 'ANY'))
             ],
             'destination_port': [
                 ('destination_port', lambda x: x.replace(':', '-')
