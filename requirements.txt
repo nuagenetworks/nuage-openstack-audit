@@ -3,7 +3,9 @@
 # process, which may cause wedges in the gate later.
 
 pbr
+
 argparse
+functools32
 keystoneauth1
 netaddr
 six

@@ -47,16 +47,15 @@ class PGForLessAudit(Audit):
 
         vports = []
         for pg in policygroups:
-            policygroup_id = pg.id
             # Audit PG
             # audit ingress entries
             self._audit_acl_entries(
                 domain, 'ingress_acl_entry_templates',
-                self.vsd.get_ingress_acl_entries, policygroup_id)
+                self.vsd.get_ingress_acl_entries, pg.id)
             # audit egress entries
             self._audit_acl_entries(
                 domain, 'egress_acl_entry_templates',
-                self.vsd.get_egress_acl_entries, policygroup_id)
+                self.vsd.get_egress_acl_entries, pg.id)
             vports.extend(self.vsd.get_vports(pg))
         self.cnt_in_sync += self.audit_entities(
             self.audit_report, ports, vports,
@@ -120,8 +119,11 @@ class PGForLessAudit(Audit):
 
         # Check the acl entry with highest priority
         entry = acl_entries[0]
-        # TODO(vandewat) check other stuff as well
-        if entry.protocol != 'ANY' or entry.action != 'FORWARD':
+        if (entry.location_type != 'POLICYGROUP' or
+                entry.network_type != 'ANY' or
+                entry.protocol != 'ANY' or
+                entry.action != 'FORWARD' or
+                entry.dscp != '*'):
             self.audit_report.append({
                 'discrepancy_type': 'ENTITY_MISMATCH',
                 'entity_type': entity_type_name,

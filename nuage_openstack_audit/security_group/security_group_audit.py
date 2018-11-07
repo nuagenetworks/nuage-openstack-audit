@@ -60,7 +60,8 @@ class SecurityGroupAudit(Audit):
 
     @TimeIt.timeit
     def audit_security_group_rules(self, domain, neutron_sg, vsd_pg_id,
-                                   acl_template_type, is_l2):
+                                   acl_template_type, is_l2,
+                                   policygroup_id_fetcher):
         """Audit security group rules attached to a single domain
 
 
@@ -88,7 +89,10 @@ class SecurityGroupAudit(Audit):
         # Note that icmp rules represent both an ingress and egress acl entry
         # in VSD because VRS does not support stateful ICMP rules, that's why
         # they are added to both lists
-        if acl_template_type == ACL_TEMPLATE_SOFTWARE:
+        if (acl_template_type == ACL_TEMPLATE_SOFTWARE and
+                neutron_sg['stateful']):
+            # ICMP rules have both an ingress and egress acl entry
+            # in VSD because VRS does not support stateful ICMP rules
             imcp_rules = [rule for rule in neutron_sg['security_group_rules']
                           if rule['protocol'] == 'icmp']
             egress_sg_rules = [rule
@@ -120,7 +124,9 @@ class SecurityGroupAudit(Audit):
             is_l2_domain=is_l2,
             is_dhcp_managed=(domain.dhcp_managed == 'managed'
                              if is_l2 else False),
-            policy_group_id=vsd_pg_id)
+            policy_group_id=vsd_pg_id,
+            policygroup_id_fetcher=policygroup_id_fetcher,
+            enterprise_network_id_fetcher=self.vsd.get_enterprise_network_id)
 
         get_sg_ext_id = ((lambda r: 'hw:' + r['id'])
                          if acl_template_type == ACL_TEMPLATE_HARDWARE
@@ -221,10 +227,16 @@ class SecurityGroupAudit(Audit):
         # Calculate PG -> vports dict
         # vports is a fetcher on policygroup
         # filter out the defaultPG_ for SRIOV
-        policygroups = self.vsd.get_policy_groups(
+        policygroups = list(self.vsd.get_policy_groups(
             domain, vspk_filter="not(name BEGINSWITH 'defaultPG-' or name "
                                 "BEGINSWITH 'PG_FOR_LESS')" + " and " +
-                                self.vspk_filter)
+                                self.vspk_filter))
+        policygroup_id_by_os_id = {self.strip_cms_id(pg.external_id): pg.id
+                                   for pg in policygroups}
+
+        def policygroup_id_fetcher(os_id):
+            return policygroup_id_by_os_id.get(os_id)
+
         # Compare security groups with policy groups
         security_groups = [sg for (sg, _) in sg_to_ports.values()
                            if not sg['id'].startswith(PG_FOR_LESS_SECURITY)]
@@ -234,7 +246,8 @@ class SecurityGroupAudit(Audit):
                                             securitygroup)
             self.audit_security_group_rules(domain, securitygroup,
                                             policygroup.id,
-                                            securitygroup['type'], is_l2)
+                                            securitygroup['type'], is_l2,
+                                            policygroup_id_fetcher)
         nr_in_sync = self.audit_entities(
             self.audit_report,
             security_groups,
@@ -340,6 +353,22 @@ class SecurityGroupAudit(Audit):
                 ACL_TEMPLATE_SOFTWARE)
             sg['type'] = sg_type
             sg_to_ports[sg_id] = (sg, ports)
+
+        # add the security groups not attached to a port but used as remote sg
+        missing_sg_ids = {sg_rule['remote_group_id']
+                          for (sg, _) in six.itervalues(sg_to_ports)
+                          if 'security_group_rules' in sg
+                          for sg_rule in sg['security_group_rules']
+                          if sg_rule['remote_group_id'] is not None and
+                          sg_rule['remote_group_id'] not in
+                          sg_id_to_ports.keys()}
+        for remote_group_id in missing_sg_ids:
+            remote_sg = self.neutron.get_security_group(remote_group_id)
+            if not remote_sg:
+                continue  # Openstack invalid
+            remote_sg['type'] = ACL_TEMPLATE_SOFTWARE
+            sg_to_ports[remote_group_id] = (remote_sg, [])
+
         return sg_to_ports
 
     @staticmethod

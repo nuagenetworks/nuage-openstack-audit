@@ -106,23 +106,14 @@ class NeutronTestHelper(NeutronClient):
 
     def create_security_group(self, name):
         return self.client.create_security_group(
-            {"security_group": {
-                "name": name}}
-        )['security_group']
+            {"security_group": {"name": name}})['security_group']
 
     def delete_security_group(self, sg_id):
         self.client.delete_security_group(sg_id)
 
-    def create_security_group_rule(self, protocol, security_group_id,
-                                   ether_type='IPv4', direction='ingress',
-                                   remote_ip_prefix='0.0.0.0/0'):
+    def create_security_group_rule(self, **kwargs):
         return self.client.create_security_group_rule(
-            {"security_group_rule": {
-                "ethertype": ether_type, "direction": direction,
-                "remote_ip_prefix": remote_ip_prefix,
-                "protocol": protocol,
-                "security_group_id": security_group_id}}
-        )['security_group_rule']
+            {"security_group_rule": kwargs})['security_group_rule']
 
     def delete_security_group_rule(self, rule_id):
         self.client.delete_security_group_rule(rule_id)

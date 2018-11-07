@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import neutronclient.common.exceptions as neutron_exceptions
+
 from nuage_openstack_audit.utils.timeit import TimeIt
 
 
@@ -141,4 +143,7 @@ class NeutronClient(object):
 
     @TimeIt.timeit
     def get_security_group(self, sg_id):
-        return self.client.show_security_group(sg_id)['security_group']
+        try:
+            return self.client.show_security_group(sg_id)['security_group']
+        except neutron_exceptions.NotFound:
+            return None

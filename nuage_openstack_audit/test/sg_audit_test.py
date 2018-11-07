@@ -60,8 +60,10 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
     sg_hw_port = None
     sg_rule_hw = None
     nr_sgs = 0
+    nr_remote_sgs = 0
     nr_sg_rules = 0
     nr_sg_rules_icmp = 0
+    nr_sg_rules_remote = 0
 
     normal_portl3 = None
     normal_port2l3 = None
@@ -135,15 +137,31 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
         cls.sg = cls.neutron.create_security_group(name="test-sg")
         cls.nr_sgs += 1
         cls.nr_sg_rules += 2  # default rules
+        cls.remote_sg = cls.neutron.create_security_group(
+            name="test-remote-sg")
+        cls.nr_remote_sgs += 1
+        cls.nr_sgs += 1
+        cls.nr_sg_rules += 2  # default rules
+        cls.nr_sg_rules_remote += 2  # default rules
         cls.sg_rule = cls.neutron.create_security_group_rule(
-            protocol='icmp', security_group_id=cls.sg['id'])
+            protocol='icmp', security_group_id=cls.sg['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_ip_prefix='0.0.0.0/0')
+        cls.nr_sg_rules_icmp += 1
+
+        cls.sg_rule_remote_group_id = cls.neutron.create_security_group_rule(
+            protocol='icmp', security_group_id=cls.sg['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_group_id=cls.remote_sg['id'])
         cls.nr_sg_rules_icmp += 1
 
         cls.sg_hw_port = cls.neutron.create_security_group(name="test-sg-hw")
         cls.nr_sgs += 1
         cls.nr_sg_rules += 2  # default rules
         cls.sg_rule_hw = cls.neutron.create_security_group_rule(
-            protocol='icmp', security_group_id=cls.sg_hw_port['id'])
+            protocol='icmp', security_group_id=cls.sg_hw_port['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_ip_prefix='0.0.0.0/0')
         cls.nr_sg_rules += 1  # HW ICMP is stateless
 
         # Ports
@@ -221,7 +239,10 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
         USER.report('=== Deleting OpenStack security groups and rules ===')
         cls.neutron.delete_security_group_rule(cls.sg_rule['id'])
         cls.neutron.delete_security_group_rule(cls.sg_rule_hw['id'])
+        cls.neutron.delete_security_group_rule(
+            cls.sg_rule_remote_group_id['id'])
         cls.neutron.delete_security_group(cls.sg['id'])
+        cls.neutron.delete_security_group(cls.remote_sg['id'])
         cls.neutron.delete_security_group(cls.sg_hw_port['id'])
 
         USER.report('=== Deleting OpenStack router & networks ===')
@@ -352,14 +373,16 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
                             self.hardware_port * self.nr_domains +
                             self.nr_ports_no_security -
                             # 1 less per SG
-                            self.nr_sgs * self.nr_domains -
+                            (self.nr_sgs - self.nr_remote_sgs) *
+                            self.nr_domains -
                             # Additionally 1 less for PG_FOR_LESS
                             self.pg_for_less_active * self.nr_domains)
 
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 1 missing PG
-        expected_discrepancies = (self.nr_sgs * self.nr_domains +
+        expected_discrepancies = ((self.nr_sgs - self.nr_remote_sgs) *
+                                  self.nr_domains +
                                   self.pg_for_less_active * self.nr_domains)
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
@@ -368,7 +391,9 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
 
     def _mock_missing_sg_rules(self, sg_id):
         sg = self.client.show_security_group(sg_id)['security_group']
-        sg['security_group_rules'] = []
+        sg['security_group_rules'] = filter(
+            lambda r: r['remote_group_id'] == SgRulesAuditTest.remote_sg['id'],
+            sg['security_group_rules'])
         return sg
 
     @mock.patch.object(NeutronClient, 'get_security_group',
@@ -377,17 +402,23 @@ class SgRulesAuditTest(testtools.TestCase, TestMixin):
     def test_sg_rule_orphan(self, *_):
         audit_report, nr_in_sync = self.main.audit_sg()
         expected_in_sync = (self.nr_ports_sg +
-                            self.nr_domains * self.nr_sgs +
-                            self.nr_ports_no_security +
+                            self.nr_domains * (self.nr_sgs +
+                                               self.nr_sg_rules +
+                                               self.nr_sg_rules_icmp * 2) +
                             self.pg_for_less_active * 4 * self.nr_domains +
-                            self.hardware_port * self.nr_domains)
+                            self.hardware_port * self.nr_domains +
+                            self.nr_ports_no_security -
+                            self.nr_domains * self.nr_sg_rules_icmp * 2 -
+                            self.nr_domains * (self.nr_sg_rules -
+                                               self.nr_sg_rules_remote))
+
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 1 missing sg_rule but icmp so 2 vsd orphans
         # Additionally the two default rules for the sg have orphans as well
-        expected_discrepancies = (self.nr_domains * (self.nr_sg_rules +
-                                                     self.nr_sg_rules_icmp * 2)
-                                  )
+        expected_discrepancies = \
+            (self.nr_domains * ((self.nr_sg_rules - self.nr_sg_rules_remote) +
+                                self.nr_sg_rules_icmp * 2))
 
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:

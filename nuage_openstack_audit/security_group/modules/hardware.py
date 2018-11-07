@@ -83,22 +83,26 @@ class HardwarePGAudit(Audit):
 
         # Check the acl entry with highest priority
         entry = acl_entries[0]
-        # TODO(vandewat) check other stuff as well
-        if (entry.protocol != 'ANY' or entry.action != 'DROP' or
-                entry.network_type != 'ANY'):
+        # TODO(vandewat) check other stuff as well like locationID?
+        # See nuage-openstack-neutron policygroups.py create_default_deny_rule
+        if (entry.protocol != 'ANY' or
+                entry.network_type != 'ANY' or
+                entry.location_type != 'POLICYGROUP' or
+                entry.action != 'DROP'):
             self.audit_report.append({
                 'discrepancy_type': 'ENTITY_MISMATCH',
                 'entity_type': 'ACL template entry',
                 'neutron_entity': os_id,
                 'vsd_entity': entry.id,
-                'discrepancy_details': 'Invalid rule for hardware block-all '
-                                       'acl'
+                'discrepancy_details':
+                    'Invalid rule for hardware block-all acl'
             })
             return False
         self.cnt_in_sync += 1
         return True
 
     def audit(self, domain, os_id):
+        self.cnt_in_sync = 0
         self.audit_report = []
         self.audit_default_block_all_acl(domain, os_id)
         return self.audit_report, self.cnt_in_sync

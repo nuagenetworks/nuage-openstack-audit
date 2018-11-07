@@ -59,40 +59,54 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
     """
 
     def __init__(self, is_stateful, acl_template_type, is_dhcp_managed,
-                 is_l2_domain, policy_group_id):
+                 is_l2_domain, policy_group_id, policygroup_id_fetcher,
+                 enterprise_network_id_fetcher):
         self._is_stateful = is_stateful
         assert acl_template_type in [constants.HARDWARE, constants.SOFTWARE]
         self._is_hardware = acl_template_type == constants.HARDWARE
         self._is_dhcp_managed = is_dhcp_managed
         self._is_l2_domain = is_l2_domain
         self._policy_group_id = policy_group_id
+        self._policygroup_id_fetcher = policygroup_id_fetcher
+        self._enterprise_network_id_fetcher = enterprise_network_id_fetcher
 
     def entity_name(self):
         return 'Security Group Rule'
 
     def map_to_vsd_object(self, sg_rule):
+        protocol = sg_rule['protocol'] if sg_rule.get('protocol') else 'ANY'
+        remote_ip_prefix = self._get_remote_ip_prefix(sg_rule)
+
         # common attributes
         vsd_obj = {
             'ether_type': self._map_ethertype(sg_rule),
-            'protocol': self._map_protocol(sg_rule),
-            'stateful': self._map_stateful(sg_rule),
-            'network_type': self._map_network_type(sg_rule),
+            'protocol': self._map_protocol(sg_rule, protocol),
+            'stateful': self._map_stateful(sg_rule, protocol),
+            'network_type': self._map_network_type(sg_rule, remote_ip_prefix),
             'location_type': self._map_location_type(sg_rule),
             'location_id': self._map_location_id(sg_rule),
             'action': self._map_action(sg_rule),
             'dscp': self._map_dscp(sg_rule),
-            # 'networkID': self._map_network_id(sg_rule)  #TODO VSD call?
         }
 
+        # Network ID
+        if remote_ip_prefix or any(sg_rule.get(key) for key in
+                                   ['remote_group_id',
+                                    'remote_external_group']):
+            network_id = self._map_network_id(sg_rule, remote_ip_prefix)
+            vsd_obj.update({'network_id': network_id})
+        else:
+            vsd_obj.update({'network_id': None})  # TODO verify me
+
         # TCP and UDP attributes
-        if sg_rule['protocol'] in ['tcp', 'udp']:
+        if protocol in ['tcp', 'udp']:
             vsd_obj.update({
                 'source_port': self._map_source_port(sg_rule),
                 'destination_port': self._map_destination_port(sg_rule)
             })
 
         # ICMP attributes
-        elif sg_rule['protocol'] == 'icmp':
+        elif protocol == 'icmp':
             if sg_rule['port_range_min']:
                 vsd_obj['icmp_type'] = self._map_icmp_type(sg_rule)
             elif sg_rule['port_range_max']:
@@ -100,6 +114,21 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
 
         # Return created VSD object
         return vsd_obj
+
+    def _get_remote_ip_prefix(self, sg_rule):
+        if not sg_rule.get('remote_ip_prefix'):
+            if self._is_hardware:
+                return self._get_any_cidr(sg_rule.get('ethertype'))
+            else:
+                if not sg_rule.get('remote_group_id'):
+                    return self._get_any_cidr(
+                        sg_rule.get('ethertype'))
+        return sg_rule.get('remote_ip_prefix')
+
+    @staticmethod
+    def _get_any_cidr(ethertype):
+        return ('::/0'
+                if ethertype == constants.OS_IPV6_ETHERTYPE else '0.0.0.0/0')
 
     @staticmethod
     def _map_source_port(_):
@@ -126,10 +155,6 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
         assert neutron_obj['port_range_max']
         return str(neutron_obj['port_range_max'])
 
-    def _map_network_id(self, neutron_obj):
-        # TODO VSD calls needed
-        pass
-
     @staticmethod
     def _map_dscp(_):
         return '*'
@@ -145,22 +170,33 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
     def _map_location_type(_):
         return 'POLICYGROUP'
 
-    def _map_network_type(self, neutron_obj):
-        if 'remote_ip_prefix' in neutron_obj:
+    def _map_network_type(self, neutron_obj, remote_ip_prefix):
+        if remote_ip_prefix:
             return 'ENTERPRISE_NETWORK'
-        elif ('remote_group_id' in neutron_obj or
-                'remote_external_group' in neutron_obj):
+        elif ((neutron_obj.get('remote_group_id') and not self._is_hardware) or
+                neutron_obj.get('remote_external_group')):
             return 'POLICYGROUP'
-        elif ((self._is_l2_domain and self._is_dhcp_managed) or
-              self._is_hardware):
+        elif not self._is_dhcp_managed or self._is_hardware:
             return 'ANY'
         else:
             return 'ENDPOINT_DOMAIN'
 
-    def _map_stateful(self, neutron_obj):
+    def _map_network_id(self, neutron_obj, remote_ip_prefix):
+        if remote_ip_prefix:
+            return self._enterprise_network_id_fetcher(
+                neutron_obj.get('ethertype'), remote_ip_prefix)
+        elif neutron_obj.get('remote_group_id') and not self._is_hardware:
+            return self._policygroup_id_fetcher(
+                neutron_obj['remote_group_id'])
+        elif neutron_obj.get('remote_external_group'):
+            return neutron_obj['remote_external_group']
+        else:
+            return None
+
+    def _map_stateful(self, neutron_obj, protocol):
         if self._is_hardware:
             return False
-        elif (neutron_obj['protocol'] == 'icmp' and (
+        elif (protocol == 'icmp' and (
                 (not str(neutron_obj['port_range_max']) and not
                  str(neutron_obj['port_range_min'])) or
                 neutron_obj['port_range_min'] not in
@@ -179,17 +215,17 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
             return None
 
     @staticmethod
-    def _map_protocol(neutron_obj):
+    def _map_protocol(neutron_obj, os_protocol):
         try:
-            return int(neutron_obj['protocol'])
+            return int(os_protocol)
         except (ValueError, TypeError):
             # protocol passed in rule create is a string
-            protocol = str(neutron_obj['protocol'])
-            if not neutron_obj['protocol']:
-                protocol = 'ANY'
-            if protocol != 'ANY':
-                if protocol == 'icmp' and neutron_obj['ethertype'] == \
+            vsd_protocol = str(os_protocol)
+            if not os_protocol:
+                vsd_protocol = 'ANY'
+            if vsd_protocol != 'ANY':
+                if vsd_protocol == 'icmp' and neutron_obj['ethertype'] == \
                         constants.OS_IPV6_ETHERTYPE:
-                    protocol = 'icmpv6'
-                protocol = constants.PROTOCOL_NAME_TO_NUM[protocol]
-            return protocol
+                    vsd_protocol = 'icmpv6'
+                vsd_protocol = constants.PROTOCOL_NAME_TO_NUM[vsd_protocol]
+            return vsd_protocol
