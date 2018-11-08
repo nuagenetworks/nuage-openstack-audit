@@ -10,4 +10,4 @@ six
 osc_lib
 python-keystoneclient
 python-neutronclient
-vspk
+vspk>=5.3.3

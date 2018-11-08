@@ -21,23 +21,33 @@ clients are set up, by defining OS\_ environmental variables.
 VSD API access is specified using environmental variables as sample-specified
 in
 
-    etc/nuage-openstack-audit.sample.rc
+   etc/nuage-openstack-audit.sample.rc
 
 ---
 Use
 ---
 
-Install the nuage-openstack-audit package.
+1. Install the nuage-openstack-audit package. E.g. by
 
-Set up API access to neutron and VSD.
+    $ git clone this repo
 
-Give:
+    $ cd nuage-openstack-audit
 
-    nuage-openstack-audit [-h|--help]
+    $ virtualenv venv
 
-for help.
+    $ . venv/bin/activate
 
-Launch a FWaaS audit:
+    $ pip install .
+
+2. Set up API access to neutron and VSD.
+
+3. Give:
+
+    nuage-openstack-audit -h
+
+   for help.
+
+4. Launch a FWaaS audit:
 
     nuage-openstack-audit fwaas
 

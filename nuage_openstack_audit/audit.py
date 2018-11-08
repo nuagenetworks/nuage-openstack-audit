@@ -152,8 +152,8 @@ class Audit(object):
         INFO.h2('%d discrepancies reported',
                 len(audit_report) - initial_audit_report_len)
         DEBUG.h2('%d entities are in sync', nbr_entities_in_sync)
-        DEBUG.h2('====== audit_entities complete ======')
-
+        DEBUG.h2('====== audit_entities (%s) complete ======',
+                 entity_matcher.__class__.__name__)
         return nbr_entities_in_sync
 
     @abc.abstractmethod
