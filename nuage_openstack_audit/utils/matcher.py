@@ -22,24 +22,29 @@ class Matcher(object):
     def entity_name(self):
         pass
 
-    @abstractmethod
     def get_mapper(self):
-        pass
+        return {}
 
-    @staticmethod
-    def as_is(value):
-        return value
+    def map_to_vsd_object(self, neutron_obj):
+        return {}
 
     def map_neutron_to_vsd(self, neutron_obj):
-        def do_mapping(mapping, obj):
+
+        # direct mapping
+        mapping = self.map_to_vsd_object(neutron_obj)
+        if mapping:
+            return mapping
+
+        # mapping by a mapper
+        else:
+            mapping = self.get_mapper()
             result = {}
-            for key in obj:
-                if key in mapping and key in obj:
+            for key in neutron_obj:
+                if key in mapping and key in neutron_obj:
                     for attr_mapping in mapping[key]:
                         result_key, method = attr_mapping
-                        result[result_key] = method(obj[key])
+                        result[result_key] = method(neutron_obj[key])
             return result
-        return do_mapping(self.get_mapper(), neutron_obj)
 
     def compare(self, neutron_obj, vsd_obj):
         v_n = self.map_neutron_to_vsd(neutron_obj)

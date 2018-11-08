@@ -28,7 +28,7 @@ from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 # test code
 from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
 from nuage_openstack_audit.osclient.osclient import Keystone  # reused
-from nuage_openstack_audit.test.neutron_test import NeutronTest
+from nuage_openstack_audit.test.neutron_test_helper import NeutronTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
@@ -129,7 +129,7 @@ class FirewallAuditBase(testtools.TestCase):
                                     cls.nbr_enabled_rules_per_fw)
         cls.nbr_fw_rules = cls.nbr_firewalls * cls.nbr_rules_per_fw
 
-        cls.neutron = NeutronTest(Keystone(OSCredentials()))
+        cls.neutron = NeutronTestHelper(Keystone(OSCredentials()))
 
         print('\n===== Start of tests (%s) =====' % cls.__name__)
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):

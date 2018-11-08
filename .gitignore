@@ -4,6 +4,7 @@ ChangeLog
 dist/
 local/
 venv/
+.eggs/
 .tox/
 nuage_openstack_audit.egg-info/
 *.json

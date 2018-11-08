@@ -81,8 +81,8 @@ class Main(object):
 
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
-            nbr_entities_in_sync += \
-                FWaaSAudit(neutron, vsd, cms_id).audit(audit_report)
+            nbr_entities_in_sync += FWaaSAudit(neutron, vsd, cms_id).audit(
+                audit_report)
 
         # -- end --
 

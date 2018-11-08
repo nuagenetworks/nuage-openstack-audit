@@ -93,10 +93,11 @@ class FWaaSMixin(object):
             filter=vspk_filter,
             fetcher_str="firewall_acls")
 
-    def get_firewall_rules(self, ent=None):
+    def get_firewall_rules(self, ent=None, vspk_filter=None):
         return VspkHelper.get_all(
             parent=self.vspk_helper.get_default_enterprise()
             if ent is None else ent,
+            filter=vspk_filter,
             fetcher_str="firewall_rules")
 
     def get_firewall_rules_by_ids(self, ent=None, os_rule_ids=None):

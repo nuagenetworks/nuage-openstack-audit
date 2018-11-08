@@ -235,7 +235,7 @@ class FWaaSAudit(Audit):
         in_syncs = self.audit_entities(
             audit_report,
             n_fw_policies,
-            self.vsd.get_firewall_acls(),
+            self.vsd.get_firewall_acls(vspk_filter=self.vspk_filter),
             FirewallPolicyMatcher(self.neutron_fw_rule_ids_to_vsd_rule_ids),
             expected_neutron_orphan=self.is_inactive_n_fw_policy)
 
@@ -252,7 +252,7 @@ class FWaaSAudit(Audit):
         in_syncs = self.audit_entities(
             audit_report,
             self.neutron.get_firewall_rules(),
-            self.vsd.get_firewall_rules(),
+            self.vsd.get_firewall_rules(vspk_filter=self.vspk_filter),
             FirewallRuleMatcher(),
             expected_neutron_orphan=self.is_fw_rule_rule_disabled,
             neutron_id_to_vsd_ids_dict=FWaaSAudit.n_rule_ids_to_vsd)

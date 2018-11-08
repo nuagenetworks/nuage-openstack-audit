@@ -16,6 +16,32 @@ import netaddr
 
 from nuage_openstack_audit.utils.matcher import Matcher
 
+
+IPV4_ETHERTYPE = '0x0800'
+IPV6_ETHERTYPE = '0x86DD'
+
+PROTOCOL_NAME_TO_NUM = {
+    'tcp': 6,
+    'udp': 17,
+    'icmp': 1,
+    'icmpv6': 58
+}
+
+OS_ACTION_TO_VSD_ACTION = {
+    'allow': 'FORWARD',
+    'deny': 'DROP'
+}
+
+OS_ACTION_TO_VSD_STATEFUL = {
+    'allow': True,
+    'deny': False
+}
+
+OS_IPVERSION_TO_VSD_ETHERTYPE = {
+    4: IPV4_ETHERTYPE,
+    6: IPV6_ETHERTYPE
+}
+
 OS_FWAAS_RULES_TO_VSD = None
 
 
@@ -30,12 +56,8 @@ class FirewallPolicyMatcher(Matcher):
 
     def get_mapper(self):
         return {
-            'name': [
-                ('name', self.as_is)
-            ],
-            'description': [
-                ('description', self.as_is)
-            ],
+            'name': [('name', lambda x: x)],
+            'description': [('description', lambda x: x)],
             'firewall_rules': [
                 ('rule_ids', OS_FWAAS_RULES_TO_VSD)
             ]
@@ -43,30 +65,6 @@ class FirewallPolicyMatcher(Matcher):
 
 
 class FirewallRuleMatcher(Matcher):
-    IPV4_ETHERTYPE = '0x0800'
-    IPV6_ETHERTYPE = '0x86DD'
-
-    PROTO_NAME_TO_NUM = {
-        'tcp': 6,
-        'udp': 17,
-        'icmp': 1,
-        'icmpv6': 58
-    }
-
-    OS_ACTION_TO_VSD_ACTION = {
-        'allow': 'FORWARD',
-        'deny': 'DROP'
-    }
-
-    OS_ACTION_TO_VSD_STATEFUL = {
-        'allow': True,
-        'deny': False
-    }
-
-    OS_IPVERSION_TO_VSD_ETHERTYPE = {
-        4: IPV4_ETHERTYPE,
-        6: IPV6_ETHERTYPE
-    }
 
     def entity_name(self):
         return 'Firewall rule'
@@ -77,30 +75,31 @@ class FirewallRuleMatcher(Matcher):
                 ('address_override',
                  lambda x: str(netaddr.IPNetwork(x).cidr) if x else None)
             ],
-            'name': [
-                ('description', self.as_is)
-            ],
+            'name': [('description', lambda x: x)],
             'destination_ip_address': [
                 ('network_id',
-                    lambda x: str(netaddr.IPNetwork(x).cidr) if x else None),
+                    lambda x: str(netaddr.IPNetwork(x).cidr)
+                    if x else None),
                 ('network_type', lambda x: 'NETWORK' if x else None)
             ],
             'source_port': [
-                ('source_port', lambda x: x.replace(':', '-') if x else None)
+                ('source_port',
+                 lambda x: x.replace(':', '-') if x else None)
             ],
             'protocol': [
-                ('protocol', lambda x: self.PROTO_NAME_TO_NUM.get(x, 'ANY'))
+                ('protocol',
+                 lambda x: PROTOCOL_NAME_TO_NUM.get(x, 'ANY'))
             ],
             'destination_port': [
                 ('destination_port', lambda x: x.replace(':', '-')
                     if x else None)
             ],
-            'action': [
-                ('action', lambda x: self.OS_ACTION_TO_VSD_ACTION[x]),
-                ('stateful', lambda x: self.OS_ACTION_TO_VSD_STATEFUL[x])
-            ],
+            'action': [('action',
+                        lambda x: OS_ACTION_TO_VSD_ACTION[x]),
+                       ('stateful',
+                        lambda x: OS_ACTION_TO_VSD_STATEFUL[x])],
             'ip_version': [
                 ('ether_type',
-                 lambda x: self.OS_IPVERSION_TO_VSD_ETHERTYPE.get(x))
+                 lambda x: OS_IPVERSION_TO_VSD_ETHERTYPE.get(x))
             ]
         }

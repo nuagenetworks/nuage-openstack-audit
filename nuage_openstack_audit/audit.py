@@ -25,7 +25,7 @@ DEBUG = Reporter('DEBUG')
 class Audit(object):
 
     def __init__(self, cms_id):
-        self.cms_id = cms_id
+        self.vspk_filter = 'externalID ENDSWITH \'@' + cms_id + '\''
 
     @staticmethod
     def get_cms_id(external_id):
@@ -52,7 +52,8 @@ class Audit(object):
                        entity_matcher,
                        excluded_vsd_entity=None,
                        expected_neutron_orphan=None,
-                       neutron_id_to_vsd_ids_dict=None):
+                       neutron_id_to_vsd_ids_dict=None,
+                       on_in_sync=None):
         """Audit a set of neutron/vsd entities.
 
         :param audit_report: the audit report to report to
@@ -65,6 +66,9 @@ class Audit(object):
                the neutron orphan audit. If None, not applicable.
         :param neutron_id_to_vsd_ids_dict: if passed, this dict is filled with
                neutron id to vsd id mappings
+        :param on_in_sync: function used to verify resource further upon
+                           being in sync, going further than the matcher.
+                           Called as on_sync(vspk_object, neutron_object)
         :return number entities in sync
         """
         DEBUG.h2('====== audit_entities (%s) ======',
@@ -84,8 +88,6 @@ class Audit(object):
         neutron_ids_to_obj = dict([(n['id'], n) for n in neutron_entities])
 
         for v in vsd_entities:
-            if Audit.get_vsd_entity_cms_id(v) != self.cms_id:
-                continue  # don't bother if cms id does not match
 
             if excluded_vsd_entity and excluded_vsd_entity(v):
                 v_excluded_entities += v
@@ -102,6 +104,8 @@ class Audit(object):
                 attr_discrepancies = entity_matcher.compare(n, v)
                 if not attr_discrepancies:
                     n_in_syncs += n
+                    if on_in_sync:
+                        on_in_sync(v, n)
                 else:
                     discrepancy_details = ','.join(
                         str(d) for d in attr_discrepancies)
