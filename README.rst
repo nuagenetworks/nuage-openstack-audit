@@ -27,19 +27,17 @@ in
 Use
 ---
 
+0. Ensure system running audit has a working Python 2.7 environment, and has access to a current PyPi mirror for install of dependencies.
+
 1. Install the nuage-openstack-audit package. E.g. by
-
-    $ git clone this repo
-
-    $ cd nuage-openstack-audit
 
     $ virtualenv venv
 
     $ . venv/bin/activate
 
-    $ pip install .
+    $ pip install <delivered .whl file>
 
-2. Set up API access to neutron and VSD.
+2. Set up API access to neutron and VSD, as highlighted above
 
 3. Give:
 
@@ -51,9 +49,11 @@ Use
 
     nuage-openstack-audit fwaas
 
+5. Review results. Any identified audit mismatch condition will be reflected in the generated audit report.
+
 -----------
 Limitations
 -----------
 
 The system under audit has to be API-write-silent during the audit
-operation.
+operation, or unpredictable audit results will occur.
