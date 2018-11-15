@@ -21,43 +21,49 @@ clients are set up, by defining standard OpenStack OS\_* environment variables.
 VSD API access and audit tool configuration is specified using environment 
 variables as specified in the sample in:
 
-   etc/nuage-openstack-audit.sample.rc
+.. code-block:: bash
+
+     etc/nuage-openstack-audit.sample.rc
 
 ---
 Use
 ---
 
-0. Ensure system running audit has a working Python 2.7 environment, and has 
+1. Ensure system running audit has a working Python 2.7 environment, and has 
    access to a current PyPi mirror for install of dependencies.
 
-1. Install the nuage-openstack-audit package. e.g.
+2. Install the nuage-openstack-audit package. e.g.
 
-    .. code-block:: sh
+   .. code-block:: bash
 
         $ virtualenv nuage-audit
         $ . ~/nuage-audit/bin/activate
         $ pip install <delivered .whl file>
 
-2. Set up API access to neutron and VSD, as highlighted above. e.g.
+3. Set up API access to neutron and VSD, using configuration environment variables as shown above. Example
+   assuming environment variables are set in etc/nuage-openstack-audit.rc and 
+   an OpenStack env file (e.g. stackrc)
 
-   Assuming environment variables are set in etc/nuage-openstack-audit.rc and stackrc
-
-   .. code-block:: sh
+   .. code-block:: bash
 
       $ source etc/nuage-openstack-audit.rc
       $ source stackrc
 
-3. Use:
+4. Use:
 
-    nuage-openstack-audit -h
+   .. code-block:: bash
+   
+      $ nuage-openstack-audit -h
 
    for help.
 
-4. Launch a FWaaS audit:
+5. Launch a FWaaS audit:
 
-    nuage-openstack-audit fwaas
+   .. code-block:: bash
 
-5. Review results. Any identified audit mismatch condition will be reflected in the generated audit report.
+      $ nuage-openstack-audit fwaas
+
+6. Review results in report file as well as any logs. Any identified audit mismatch condition will be reflected in the generated audit report.
 
 -----------
 Limitations
