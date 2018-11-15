@@ -32,18 +32,20 @@ Use
 
 1. Install the nuage-openstack-audit package. e.g.
 
-    $ virtualenv nuage-audit
+    .. code-block:: sh
 
-    $ . ~/nuage-audit/bin/activate
-
-    $ pip install <delivered .whl file>
+        $ virtualenv nuage-audit
+        $ . ~/nuage-audit/bin/activate
+        $ pip install <delivered .whl file>
 
 2. Set up API access to neutron and VSD, as highlighted above. e.g.
 
-    Assuming environment variables are set in etc/nuage-openstack-audit.rc and stackrc
+   Assuming environment variables are set in etc/nuage-openstack-audit.rc and stackrc
 
-    $ source etc/nuage-openstack-audit.rc
-    $ source stackrc
+   .. code-block:: sh
+
+      $ source etc/nuage-openstack-audit.rc
+      $ source stackrc
 
 3. Use:
 
