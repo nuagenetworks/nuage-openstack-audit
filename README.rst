@@ -40,6 +40,8 @@ Use
 
 2. Set up API access to neutron and VSD, as highlighted above. e.g.
 
+    Assuming environment variables are set in etc/nuage-openstack-audit.rc and stackrc
+
     $ source etc/nuage-openstack-audit.rc
     $ source stackrc
 
