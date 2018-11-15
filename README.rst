@@ -2,28 +2,24 @@
 Nuage OpenStack Audit
 =====================
 
-A smart auditing tool for Nuage-OpenStack deployments.
+A smart auditing tool for Nuage OpenStack deployments.
 
 -----
 Scope
 -----
 
 Nuage OpenStack Audit is auditing networking resources between
-OpenStack neutron and the Nuage Networks VCS platform.
+OpenStack Neutron and the Nuage Networks VCP platform.
 At both sides it requires API access, i.e.
 
-- keystone and neutron access at OpenStack side
-- VSD API access at Nuage VCS side.
+- keystone and neutron access at OpenStack side as an `admin` user with access to `admin` tenant
+- VSD API access at Nuage VCS side with `CSP Root Group` privileges
 
 Keystone/Neutron access is set up in same way as python keystone/neutron
 clients are set up, by defining standard OpenStack OS\_* environment variables.
 
 VSD API access and audit tool configuration is specified using environment 
-variables as specified in the sample in:
-
-.. code-block:: bash
-
-     etc/nuage-openstack-audit.sample.rc
+variables as specified in the sample file `etc/nuage-openstack-audit.sample.rc`
 
 ---
 Use
