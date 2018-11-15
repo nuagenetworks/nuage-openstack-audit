@@ -37,9 +37,12 @@ Use
 
     $ pip install <delivered .whl file>
 
-2. Set up API access to neutron and VSD, as highlighted above
+2. Set up API access to neutron and VSD, as highlighted above. e.g.
 
-3. Give:
+    $ source etc/nuage-openstack-audit.rc
+    $ source stackrc
+
+3. Use:
 
     nuage-openstack-audit -h
 
