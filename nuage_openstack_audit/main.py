@@ -26,6 +26,8 @@ WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
 
+NUAGE_OPENSTACK_AUDIT_PREFIX = 'nuage_openstack_audit_'
+
 
 class Main(object):
 
@@ -127,7 +129,8 @@ class Main(object):
         #                                based on env. log level setting
 
         log_dir = Utils.get_env_var('OS_AUDIT_LOG_DIR', '.')
-        log_file = self.expand_filename(log_dir, initiating_time, '.log')
+        log_file = self.expand_filename(
+            log_dir, NUAGE_OPENSTACK_AUDIT_PREFIX + initiating_time, '.log')
 
         logger.init_logging(level, log_file)
         USER.h0('Logfile created at %s', self.relative_filename(log_file))
@@ -153,7 +156,7 @@ class Main(object):
             os.makedirs(dir_name)
         if not file_name.endswith(file_ext):
             file_name += file_ext
-        return '%s/%s_%s' % (dir_name, 'nuage_openstack_audit', file_name)
+        return '%s/%s' % (dir_name, file_name)
 
     @staticmethod
     def relative_filename(file_name):
@@ -163,11 +166,12 @@ class Main(object):
         return file_name
 
     @staticmethod
-    def prep_report_name(suffix='report'):
+    def prep_report_name(initiating_time):
         report_dir = Utils.get_env_var('OS_AUDIT_REPORT_DIR', '.')
         fixed_report_file = Utils.get_env_var('OS_AUDIT_REPORT_FILE', '')
-        return Main.expand_filename(
-            report_dir, fixed_report_file or suffix, '.json')
+        if not fixed_report_file:
+            fixed_report_file = NUAGE_OPENSTACK_AUDIT_PREFIX + initiating_time
+        return Main.expand_filename(report_dir, fixed_report_file, '.json')
 
     @staticmethod
     def end_report(report_file, audit_report, nbr_entities_in_sync):
