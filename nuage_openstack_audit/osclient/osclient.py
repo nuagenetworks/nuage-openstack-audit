@@ -26,7 +26,7 @@ class OSCredentials(object):
         self.project_name = Utils.get_env_var(
             'OS_PROJECT_NAME', Utils.get_env_var('OS_TENANT_NAME', ''))
         if not self.project_name:
-            Utils.env_error('ERROR: OS_PROJECT_NAME nor OS_TENANT_NAME '
+            Utils.env_error('OS_PROJECT_NAME nor OS_TENANT_NAME '
                             'is defined. Please set either of both.')
         self.password = Utils.get_env_var('OS_PASSWORD')
         self.identity_api_version = int(

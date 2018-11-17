@@ -12,12 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from __future__ import print_function
-
 import os
-import sys
-
-from nuage_openstack_audit.utils.logger import Reporter
 
 
 class Utils(object):
@@ -31,9 +26,8 @@ class Utils(object):
             self.debug = debug
 
     @staticmethod
-    def env_error(*args):
-        Reporter('ERROR').report(*args)
-        raise EnvironmentError
+    def env_error(msg, *args):
+        raise EnvironmentError((msg % tuple(args)) if args else msg)
 
     @staticmethod
     def get_env_var(name, default=None):
@@ -46,14 +40,8 @@ class Utils(object):
             if default is not None:
                 return default
             else:
-                Utils.env_error('ERROR: Please set %s. Aborting.', name)
+                Utils.env_error('Please set %s. Aborting.', name)
 
     @staticmethod
     def get_env_bool(name, default=False):
         return str(Utils.get_env_var(name, default)).lower() == 'true'
-
-    @staticmethod
-    def boolean_question(question):
-        print(question + ' [y|N] ', end='')
-        answer = sys.stdin.readline().strip().lower()
-        return answer and answer == 'y'
