@@ -14,13 +14,16 @@
 
 import abc
 import pprint
+import six
 
 from nuage_openstack_audit.utils.logger import Reporter
 
 INFO = Reporter('INFO')
 
 
+@six.add_metaclass(abc.ABCMeta)
 class EntityTracker(object):
+
     def __init__(self, name=None, tracked_entities=None):
         self._name = name
         self._tracked = tracked_entities
@@ -54,7 +57,6 @@ class CountingEntityTracker(EntityTracker):
         self._tracked += 1
         return self
 
-    @abc.abstractmethod
     def count(self):
         return self._tracked
 
@@ -71,12 +73,11 @@ class ListingEntityTracker(EntityTracker):
         self._tracked.append(e)
         return self
 
-    @abc.abstractmethod
     def count(self):
         return len(self._tracked)
 
     @staticmethod
-    def report_entities(entities):
+    def _report_entities(entities):
         INFO.set_color(INFO.BLUE)
         for e in entities:
             INFO.h0(pprint.pformat(e.to_dict() if hasattr(e, 'to_dict') else e,
@@ -86,7 +87,7 @@ class ListingEntityTracker(EntityTracker):
     def report(self, text='%d %s found', level='INFO', header='h2'):
         getattr(Reporter(level), header)(text, len(self._tracked), self._name)
         if self.tracked:
-            self.report_entities(self._tracked)
+            self._report_entities(self._tracked)
 
 
 def tracked_as_counting(*args):
