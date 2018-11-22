@@ -187,7 +187,8 @@ def main():
     try:
         Main().run()
 
-    except EnvironmentError:
+    except Exception as e:
+        ERROR.h0('ERROR: %s', e)
         exit(1)
 
 

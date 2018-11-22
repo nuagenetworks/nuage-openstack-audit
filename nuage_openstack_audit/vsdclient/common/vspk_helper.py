@@ -67,18 +67,27 @@ class VspkHelper(object):
         self.cms_id = cms_id
 
         # Connect to VSP
+        LOG.debug('Setting up vspk')
         self.vspk = importlib.import_module('vspk.{}'.format(vspk_version))
         self._session = self.vspk.NUVSDSession(
             username=user,
             password=password,
             enterprise='csp',
             api_url='https://{}'.format(vsd_server))
-        self._session.start()
+        try:
+            self._session.start()
+        except Exception as e:
+            LOG.debug('Failed connecting with VSD: %s', e)
+            raise EnvironmentError('Could not connect with VSD.')
+        else:
+            LOG.debug('Started vspk session')
 
         # Store default enterprise
         self.default_enterprise = self._session.user.enterprises.get(
             filter='name is "{}"'.format(enterprise))[0]
-        assert self.default_enterprise
+        if not self.default_enterprise:
+            raise EnvironmentError('Default enterprise %s '
+                                   'not found' % enterprise)
 
     def get_default_enterprise(self):
         return self.default_enterprise
