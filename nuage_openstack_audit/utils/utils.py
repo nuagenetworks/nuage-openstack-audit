@@ -17,14 +17,6 @@ from oslo_utils import uuidutils
 
 
 class Utils(object):
-    class TestMainArgs(object):
-        def __init__(self, resource, report=None,
-                     verbose=False, extreme_verbose=False, debug=False):
-            self.resource = resource
-            self.report = report
-            self.verbose = verbose
-            self.extreme_verbose = extreme_verbose
-            self.debug = debug
 
     @staticmethod
     def env_error(msg, *args):

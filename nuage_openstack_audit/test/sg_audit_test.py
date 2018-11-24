@@ -18,17 +18,29 @@ import pprint
 import testtools
 from nuage_openstack_audit.test.utils.decorators import header
 
+# system under test
+from nuage_openstack_audit.main import Main  # system under test
+from nuage_openstack_audit.osclient.osclient import Neutron  # for mocking
+from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
+
+# test code
 from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
 from nuage_openstack_audit.osclient.osclient import Keystone  # reused
 from nuage_openstack_audit.test.utils.neutron_test_helper \
     import NeutronTestHelper
-from nuage_openstack_audit.security_group.security_group_audit \
-    import SecurityGroupAudit
 from nuage_openstack_audit.utils.utils import Utils
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
-from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 from nuage_openstack_audit.test.utils.vsd_test_helper import VSDTestHelper
-from nuage_openstack_audit.osclient.osclient import Neutron
+
+from nuage_openstack_audit.test.utils.main_args import MainArgs
+
+# run me using:
+# python -m testtools.run nuage_openstack_audit/test/sg_audit_test.py
+
+# *****************************************************************************
+#  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
+#            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
+# *****************************************************************************
 
 
 def get_vsd_client():
@@ -44,6 +56,9 @@ def get_vsd_client():
 
 
 class SGRulesAuditTest(testtools.TestCase):
+
+    main = None
+
     neutron = None
     router = None
     networkl3 = None
@@ -76,7 +91,6 @@ class SGRulesAuditTest(testtools.TestCase):
     vsd = None
     domain = None
     policy_group = None
-    auditor = None
 
     @classmethod
     def setUpClass(cls):
@@ -189,9 +203,8 @@ class SGRulesAuditTest(testtools.TestCase):
         cls.pg_for_less_active = True
         cls.hardware_port = True
 
-        # auditor
-        cls.auditor = SecurityGroupAudit(neutron=cls.neutron, vsd=cls.vsd,
-                                         cms_id=Utils.get_env_var('OS_CMS_ID'))
+        print('\n=== Launching system under test')
+        cls.main = Main(MainArgs('security_group'))
 
     @classmethod
     def tearDownClass(cls):
@@ -223,7 +236,7 @@ class SGRulesAuditTest(testtools.TestCase):
 
     @header()
     def test_no_discrepancies(self):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * (self.nr_sgs +
@@ -242,7 +255,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        return_value=[])
     @header()
     def test_policygroup_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         # Expected in sync: Hardware acl is audited separately
         expected_in_sync = self.hardware_port * self.nr_domains
@@ -274,7 +287,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        _mock_missing_port_sg)
     @header()
     def test_sg_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         # Expected: pg for less + port with no port security
         expected_in_sync = (self.pg_for_less_active * 4 * self.nr_domains +
@@ -303,7 +316,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        _mock_missing_port)
     @header()
     def test_port_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         # Expected in sync: -2 because of the normal_port1 being excluded
         expected_in_sync = (self.nr_ports_sg +
@@ -337,7 +350,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        new=_mock_missing_vport)
     @header()
     def test_vport_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * (self.nr_sgs +
@@ -371,7 +384,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        new=_mock_missing_sg_rule)
     @header()
     def test_sg_rule_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * self.nr_sgs +
@@ -401,7 +414,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        return_value=[])
     @header()
     def test_acl_entry_orphan(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * self.nr_sgs +
@@ -448,7 +461,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        new=mock_changed_sg)
     @header()
     def test_sg_discrepancy(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         # Expected: pg for less + port with no port security
         expected_in_sync = (self.pg_for_less_active * 4 * self.nr_domains +
@@ -476,7 +489,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        new=mock_changed_sg_rule)
     @header()
     def test_sg_rule_discrepancy(self, *_):
-        audit_report, nr_in_sync = self.auditor.audit()
+        audit_report, nr_in_sync = self.main.run()
         pprint.pprint(audit_report)
         # expected not in sync: ICMP rule * 2 * nr domains
         expected_in_sync = (self.nr_ports_sg +

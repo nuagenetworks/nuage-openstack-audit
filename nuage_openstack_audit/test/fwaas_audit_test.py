@@ -19,7 +19,7 @@ import testtools
 from nuage_openstack_audit.test.utils.decorators import header
 
 # system under test
-from nuage_openstack_audit.main import Main  # under test
+from nuage_openstack_audit.main import Main  # system under test
 from nuage_openstack_audit.osclient.osclient import Neutron  # for mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
@@ -31,6 +31,8 @@ from nuage_openstack_audit.test.utils.neutron_test_helper \
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
+from nuage_openstack_audit.test.utils.main_args import MainArgs
+
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/fwaas_audit_test.py
 
@@ -39,27 +41,6 @@ from nuage_openstack_audit.utils.utils import Utils
 #            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
 
-USER = Reporter('USER')
-
-developer_modus = Utils.get_env_bool('OS_AUDIT_DEVELOPER_MODUS')
-verbose = Utils.get_env_bool('OS_AUDIT_VERBOSE')
-extreme_verbose = Utils.get_env_bool('OS_AUDIT_EXTREME_VERBOSE')
-log_level = Utils.get_env_var('OS_AUDIT_LOG_LEVEL', 'INFO')
-
-# -----------------------------------------------------------------------------
-USER.set_color(USER.BLUE)
-if developer_modus:
-    USER.report('Developer modus is on, which implies debug & extreme verbose')
-else:
-    USER.report('VERBOSE is %s, set OS_AUDIT_VERBOSE to change', verbose)
-    if verbose or extreme_verbose:
-        USER.report('Extreme VERBOSE is %s, set OS_AUDIT_EXTREME_VERBOSE '
-                    'to change', extreme_verbose)
-    USER.report('DEBUG is %s, set OS_AUDIT_LOG_LEVEL to change',
-                'debug' in log_level.lower())
-USER.set_color(USER.ENDC).newline()
-# -----------------------------------------------------------------------------
-
 
 def get_nbr_firewalls_under_test():
     return int(Utils.get_env_var('OS_AUDIT_TEST_NR_FIREWALLS', 3))
@@ -67,9 +48,9 @@ def get_nbr_firewalls_under_test():
 
 class FirewallAuditBase(testtools.TestCase):
 
-    neutron = None
     main = None
 
+    neutron = None
     routers = None
     fws = None
     fw_policies = None
@@ -143,9 +124,7 @@ class FirewallAuditBase(testtools.TestCase):
                     cls.nbr_firewalls_down += 1
 
         print('\n=== Launching system under test')
-        cls.main = Main(Utils.TestMainArgs('fwaas',
-                                           verbose=verbose,
-                                           extreme_verbose=extreme_verbose))
+        cls.main = Main(MainArgs('fwaas'))
 
     @classmethod
     def tearDownClass(cls):
