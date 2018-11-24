@@ -17,8 +17,8 @@ from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
 
 class VSDTestHelper(VsdClient):
 
-    def __init__(self, *args, **kwargs):
-        super(VSDTestHelper, self).__init__(*args, **kwargs)
+    def __init__(self, cms_id):
+        super(VSDTestHelper, self).__init__(cms_id)
 
     def create_gateway(self, **kwargs):
         new_gateway = self.vspk_helper.vspk.NUGateway(**kwargs)

@@ -16,22 +16,22 @@ import functools
 import six
 import time
 
+REPORT_EXECUTION_TIME = False
+
 
 def header():
     def decorator(f):
         @functools.wraps(f)
         def wrapper(self, *func_args, **func_kwargs):
             if six.get_function_code(f).co_name != 'wrapper':
-                # make sure there is at least 1 sec in between tests such that
-                # report file is different
-                time.sleep(1)
                 print("\n=== START of {} ===".format(
                     six.get_function_code(f).co_name))
             start_time = time.time()
             result = f(self, *func_args, **func_kwargs)
-            exec_time = int(time.time() - start_time)
             if six.get_function_code(f).co_name != 'wrapper':
-                print("=== Execution time = {} SECS ===".format(exec_time))
+                if REPORT_EXECUTION_TIME:
+                    exec_time = int(time.time() - start_time)
+                    print("=== Execution time = {} SECS ===".format(exec_time))
                 print("=== END of {} ===".format(
                     six.get_function_code(f).co_name))
             return result

@@ -13,26 +13,22 @@
 #    under the License.
 
 import mock
-import pprint
-
 import testtools
-from nuage_openstack_audit.test.utils.decorators import header
 
 # system under test
 from nuage_openstack_audit.main import Main  # system under test
-from nuage_openstack_audit.osclient.osclient import Neutron  # for mocking
+from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
-from nuage_openstack_audit.osclient.osclient import Keystone  # reused
+from nuage_openstack_audit.test.utils.decorators import header
+from nuage_openstack_audit.test.utils.main_args import MainArgs
 from nuage_openstack_audit.test.utils.neutron_test_helper \
     import NeutronTestHelper
-from nuage_openstack_audit.utils.utils import Utils
-from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
+from nuage_openstack_audit.test.utils.test_mixin import TestMixin
 from nuage_openstack_audit.test.utils.vsd_test_helper import VSDTestHelper
-
-from nuage_openstack_audit.test.utils.main_args import MainArgs
+from nuage_openstack_audit.utils.logger import Reporter
+from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
 
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/sg_audit_test.py
@@ -42,20 +38,12 @@ from nuage_openstack_audit.test.utils.main_args import MainArgs
 #            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
 
-
-def get_vsd_client():
-    user, password = Utils.get_env_var(
-        'OS_VSD_SERVER_AUTH', 'csproot:csproot').split(':')
-    return VSDTestHelper(
-        vsd_server=Utils.get_env_var('OS_VSD_SERVER'),
-        user=user,
-        password=password,
-        base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
-        cms_id=Utils.get_env_var('OS_CMS_ID'),
-        enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
+WARN = Reporter('WARN')
+USER = Reporter('USER')
+INFO = Reporter('INFO')
 
 
-class SGRulesAuditTest(testtools.TestCase):
+class SgRulesAuditTest(testtools.TestCase, TestMixin):
 
     main = None
 
@@ -94,15 +82,18 @@ class SGRulesAuditTest(testtools.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(SGRulesAuditTest, cls).setUpClass()
+        super(SgRulesAuditTest, cls).setUpClass()
+        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         # vsd entities
+        cls.vsd = VSDTestHelper(Main.get_cms_id())
+        cls.vsd.authenticate(Main.get_vsd_credentials())
+
+        USER.report('\n=== Creating VSD gateway resources ===')
         # TODO Check discrepancies with correctness of ID
-        cls.vsd = get_vsd_client()
         # cls.l3domain = cls.vsd.get_l3domain(by_neutron_id=cls.router['id'])
         # cls.l3policy_group = cls.vsd.get_policy_group(
         #     domain=cls.domain, by_neutron_id=cls.sg['id'])
-
         cls.gateway = cls.vsd.create_gateway(name='vsg', system_id='my-sys_id',
                                              personality='VSG')
         cls.gw_port1 = cls.vsd.create_gateway_port(cls.gateway,
@@ -119,7 +110,10 @@ class SGRulesAuditTest(testtools.TestCase):
                                                    port_type='ACCESS')
 
         # neutron entities
-        cls.neutron = NeutronTestHelper(Keystone(OSCredentials()))
+        cls.neutron = NeutronTestHelper()
+        cls.neutron.authenticate(Main.get_os_credentials())
+
+        USER.report('=== Creating OpenStack router & networks ===')
         cls.router = cls.neutron.create_router(name='test-router')
         cls.nr_domains += 1
 
@@ -134,9 +128,10 @@ class SGRulesAuditTest(testtools.TestCase):
             ip_version=4,
             cidr='10.0.0.0/24')
         cls.nr_domains += 1
-
         cls.neutron.create_router_interface(router_id=cls.router['id'],
                                             subnet_id=cls.subnetl3['id'])
+
+        USER.report('=== Creating OpenStack security-group and rules ===')
         cls.sg = cls.neutron.create_security_group(name="test-sg")
         cls.nr_sgs += 1
         cls.nr_sg_rules += 2  # default rules
@@ -152,6 +147,7 @@ class SGRulesAuditTest(testtools.TestCase):
         cls.nr_sg_rules += 1  # HW ICMP is stateless
 
         # Ports
+        USER.report('=== Creating OpenStack ports ===')
         # l3
         cls.normal_portl3 = cls.neutron.create_port(
             cls.networkl3, security_groups=[cls.sg['id']],
@@ -203,12 +199,16 @@ class SGRulesAuditTest(testtools.TestCase):
         cls.pg_for_less_active = True
         cls.hardware_port = True
 
-        print('\n=== Launching system under test')
+        USER.report('\n=== Launching system under test ===')
         cls.main = Main(MainArgs('security_group'))
 
     @classmethod
     def tearDownClass(cls):
-        super(SGRulesAuditTest, cls).tearDownClass()
+        USER.report('\n===== End of tests (%s) =====', cls.__name__)
+
+        super(SgRulesAuditTest, cls).tearDownClass()
+
+        USER.report('\n=== Deleting OpenStack ports ===')
         cls.neutron.delete_port(cls.normal_portl3['id'])
         cls.neutron.delete_port(cls.normal_port2l3['id'])
         cls.neutron.delete_port(cls.normal_port_no_securityl3['id'])
@@ -218,10 +218,13 @@ class SGRulesAuditTest(testtools.TestCase):
         cls.neutron.delete_port(cls.hw_port_l3['id'])
         cls.neutron.delete_port(cls.hw_port_l2['id'])
 
+        USER.report('=== Deleting OpenStack security groups and rules ===')
         cls.neutron.delete_security_group_rule(cls.sg_rule['id'])
         cls.neutron.delete_security_group_rule(cls.sg_rule_hw['id'])
         cls.neutron.delete_security_group(cls.sg['id'])
         cls.neutron.delete_security_group(cls.sg_hw_port['id'])
+
+        USER.report('=== Deleting OpenStack router & networks ===')
         cls.neutron.delete_router_interface(router_id=cls.router['id'],
                                             subnet_id=cls.subnetl3['id'])
         cls.neutron.delete_subnet(cls.subnetl3['id'])
@@ -230,14 +233,14 @@ class SGRulesAuditTest(testtools.TestCase):
         cls.neutron.delete_subnet(cls.subnetl2['id'])
         cls.neutron.delete_network(cls.networkl2['id'])
 
+        USER.report('=== Deleting VSD gateway resources ===')
         cls.gw_port1.delete()
         cls.gw_port2.delete()
         cls.gateway.delete()
 
     @header()
     def test_no_discrepancies(self):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * (self.nr_sgs +
                                                self.nr_sg_rules +
@@ -245,32 +248,28 @@ class SGRulesAuditTest(testtools.TestCase):
                             self.pg_for_less_active * 4 * self.nr_domains +
                             self.hardware_port * self.nr_domains +
                             self.nr_ports_no_security)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+
         # expecting zero discrepancies
-        self.assertEqual(0, len(audit_report))
+        self.assert_audit_report_length(0, audit_report)
 
     @mock.patch.object(VsdClient, 'get_policy_groups',
                        return_value=[])
     @header()
     def test_policygroup_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         # Expected in sync: Hardware acl is audited separately
         expected_in_sync = self.hardware_port * self.nr_domains
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # no port security will still be checked
         expected_discrepancies = (self.nr_sgs * self.nr_domains +
                                   self.nr_ports_no_security +
                                   self.pg_for_less_active * self.nr_domains)
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ORPHAN_NEUTRON_ENTITY',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ORPHAN_NEUTRON_ENTITY',
+                              discrepancy['discrepancy_type'])
 
     def _mock_missing_port_sg(self, filters=None, fields=None):
         # Leave out self.normal_port but otherwise execute as normal
@@ -283,25 +282,22 @@ class SGRulesAuditTest(testtools.TestCase):
             port['security_groups'] = []
         return ports
 
-    @mock.patch.object(Neutron, 'get_ports',
+    @mock.patch.object(NeutronClient, 'get_ports',
                        _mock_missing_port_sg)
     @header()
     def test_sg_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         # Expected: pg for less + port with no port security
         expected_in_sync = (self.pg_for_less_active * 4 * self.nr_domains +
                             self.nr_ports_no_security)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 1 missing PG per domain
         expected_discrepancies = self.nr_sgs * self.nr_domains
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ORPHAN_VSD_ENTITY',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ORPHAN_VSD_ENTITY',
+                              discrepancy['discrepancy_type'])
 
     def _mock_missing_port(self, filters=None, fields=None):
         # Leave out self.normal_port but otherwise execute as normal
@@ -312,12 +308,11 @@ class SGRulesAuditTest(testtools.TestCase):
         ports = self.client.list_ports(**kwargs)['ports']
         return [p for p in ports if p['name'] != 'normal_port1']
 
-    @mock.patch.object(Neutron, 'get_ports',
+    @mock.patch.object(NeutronClient, 'get_ports',
                        _mock_missing_port)
     @header()
     def test_port_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         # Expected in sync: -2 because of the normal_port1 being excluded
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * (self.nr_sgs +
@@ -326,16 +321,14 @@ class SGRulesAuditTest(testtools.TestCase):
                             self.pg_for_less_active * 4 * self.nr_domains +
                             self.hardware_port * self.nr_domains +
                             self.nr_ports_no_security) - 2
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 2 ports missing
         expected_discrepancies = 2
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ORPHAN_VSD_ENTITY',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ORPHAN_VSD_ENTITY',
+                              discrepancy['discrepancy_type'])
 
     def _mock_missing_vport(self, parent=None, vspk_filter=None):
         vports = VspkHelper.get_all(
@@ -350,8 +343,7 @@ class SGRulesAuditTest(testtools.TestCase):
                        new=_mock_missing_vport)
     @header()
     def test_vport_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * (self.nr_sgs +
                                                self.nr_sg_rules +
@@ -364,36 +356,32 @@ class SGRulesAuditTest(testtools.TestCase):
                             # Additionally 1 less for PG_FOR_LESS
                             self.pg_for_less_active * self.nr_domains)
 
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+
         # Expected discrepancies: 1 missing PG
         expected_discrepancies = (self.nr_sgs * self.nr_domains +
                                   self.pg_for_less_active * self.nr_domains)
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ORPHAN_NEUTRON_ENTITY',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ORPHAN_NEUTRON_ENTITY',
+                              discrepancy['discrepancy_type'])
 
-    def _mock_missing_sg_rule(self, sg_id):
+    def _mock_missing_sg_rules(self, sg_id):
         sg = self.client.show_security_group(sg_id)['security_group']
         sg['security_group_rules'] = []
         return sg
 
-    @mock.patch.object(Neutron, 'get_security_group',
-                       new=_mock_missing_sg_rule)
+    @mock.patch.object(NeutronClient, 'get_security_group',
+                       new=_mock_missing_sg_rules)
     @header()
     def test_sg_rule_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * self.nr_sgs +
                             self.nr_ports_no_security +
                             self.pg_for_less_active * 4 * self.nr_domains +
                             self.hardware_port * self.nr_domains)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 1 missing sg_rule but icmp so 2 vsd orphans
         # Additionally the two default rules for the sg have orphans as well
@@ -401,10 +389,10 @@ class SGRulesAuditTest(testtools.TestCase):
                                                      self.nr_sg_rules_icmp * 2)
                                   )
 
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ORPHAN_VSD_ENTITY',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ORPHAN_VSD_ENTITY',
+                              discrepancy['discrepancy_type'])
 
     @mock.patch.object(VsdClient, 'get_ingress_acl_entries',
                        return_value=[])
@@ -414,14 +402,11 @@ class SGRulesAuditTest(testtools.TestCase):
                        return_value=[])
     @header()
     def test_acl_entry_orphan(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * self.nr_sgs +
                             self.nr_ports_no_security)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         expected_discrepancies = (
             self.nr_domains * (self.nr_sg_rules +
@@ -429,7 +414,7 @@ class SGRulesAuditTest(testtools.TestCase):
             self.pg_for_less_active * 4 * self.nr_domains +
             self.hardware_port * self.nr_domains
         )
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         mismatch = 0
         orphan = 0
         for discrepancy in audit_report:
@@ -441,40 +426,36 @@ class SGRulesAuditTest(testtools.TestCase):
                 self.fail("Discrepancy type {} unexpected.".format(
                     discrepancy['discrepancy_type']))
         expected_mismatches = self.pg_for_less_active * 4 * self.nr_domains
-        self.assertEqual(expected_mismatches, mismatch,
-                         "Exactly {} entity mismatches"
-                         "expected, found {}".format(expected_mismatches,
-                                                     mismatch))
+        self.assert_equal(expected_mismatches, mismatch,
+                          'Exactly {} entity mismatches expected, found {}')
         expected_orphans = (self.nr_domains * (self.nr_sg_rules +
                                                self.nr_sg_rules_icmp * 2) +
                             self.hardware_port * self.nr_domains)
-        self.assertEqual(expected_orphans, orphan,
-                         "Exactly {} neutron orphans "
-                         "expected, found {}".format(expected_orphans, orphan))
+        self.assert_equal(expected_orphans, orphan,
+                          'Exactly {} neutron orphans expected, found {}')
 
     def mock_changed_sg(self, sg_id):
         sg = self.client.show_security_group(sg_id)['security_group']
         sg['name'] = ''
         return sg
 
-    @mock.patch.object(Neutron, 'get_security_group',
+    @mock.patch.object(NeutronClient, 'get_security_group',
                        new=mock_changed_sg)
     @header()
     def test_sg_discrepancy(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
+
         # Expected: pg for less + port with no port security
         expected_in_sync = (self.pg_for_less_active * 4 * self.nr_domains +
                             self.hardware_port * self.nr_domains +
                             self.nr_ports_no_security)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+
         expected_discrepancies = self.nr_sgs * self.nr_domains
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ENTITY_MISMATCH',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ENTITY_MISMATCH',
+                              discrepancy['discrepancy_type'])
 
     def mock_changed_sg_rule(self, sg_id):
         sg = self.client.show_security_group(sg_id)['security_group']
@@ -485,26 +466,25 @@ class SGRulesAuditTest(testtools.TestCase):
                 sg_rule['protocol'] = 'tcp'
         return sg
 
-    @mock.patch.object(Neutron, 'get_security_group',
+    @mock.patch.object(NeutronClient, 'get_security_group',
                        new=mock_changed_sg_rule)
     @header()
     def test_sg_rule_discrepancy(self, *_):
-        audit_report, nr_in_sync = self.main.run()
-        pprint.pprint(audit_report)
+        audit_report, nr_in_sync = self.main.audit_sg()
+        INFO.pprint(audit_report)
+
         # expected not in sync: ICMP rule * 2 * nr domains
         expected_in_sync = (self.nr_ports_sg +
                             self.nr_domains * self.nr_sgs +
                             self.pg_for_less_active * 4 * self.nr_domains +
                             self.hardware_port * self.nr_domains +
                             self.nr_ports_no_security)
-        self.assertEqual(expected_in_sync, nr_in_sync,
-                         "Entities in sync: actual {}, expected: {}".format(
-                             nr_in_sync, expected_in_sync))
-        pprint.pprint(audit_report)
+        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+
         # discrepancies: icmp rule -> tcp rule + one orphan doubled icmp rule
         expected_discrepancies = (self.nr_domains * self.nr_sg_rules +
                                   self.nr_domains * self.nr_sg_rules_icmp * 2)
-        self.assertEqual(expected_discrepancies, len(audit_report))
+        self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual('ENTITY_MISMATCH',
-                             discrepancy['discrepancy_type'])
+            self.assert_equal('ENTITY_MISMATCH',
+                              discrepancy['discrepancy_type'])

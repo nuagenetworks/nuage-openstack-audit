@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import logging
+import pprint
 
 LOGGING = None
 
@@ -151,6 +152,9 @@ class Reporter(LoggerBase):
         return self  # returning self allows for chaining, e.g.
         #              Reporter().newline().set_color(green).h0('OK').endc()
 
+    def pprint(self, some_dict):
+        return self.report(pprint.pformat(some_dict, indent=2))
+
     def newline(self):
         return self.report('')
 
@@ -159,6 +163,21 @@ class Reporter(LoggerBase):
 
     def endc(self):  # end of color
         return self.set_color(Reporter.ENDC)
+
+    def coloured(self, color, msg, *args, **kwargs):
+        return self.set_color(color).report(msg, *args, **kwargs).endc()
+
+    def green(self, msg, *args, **kwargs):
+        return self.coloured(Reporter.GREEN, msg, *args, **kwargs)
+
+    def blue(self, msg, *args, **kwargs):
+        return self.coloured(Reporter.BLUE, msg, *args, **kwargs)
+
+    def yellow(self, msg, *args, **kwargs):
+        return self.coloured(Reporter.YELLOW, msg, *args, **kwargs)
+
+    def red(self, msg, *args, **kwargs):
+        return self.coloured(Reporter.RED, msg, *args, **kwargs)
 
     def h0(self, msg, *args, **kwargs):
         return self.report(msg, *args, **kwargs)

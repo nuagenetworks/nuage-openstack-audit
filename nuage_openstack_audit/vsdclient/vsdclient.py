@@ -20,16 +20,26 @@ from nuage_openstack_audit.vsdclient.resources.security_groups_mixin \
     import SecurityGroupsMixin
 
 
+class VsdCredentials:
+
+    def __init__(self, vsd_server, user, password, enterprise, base_uri):
+        self.vsd_server = vsd_server
+        self.user = user
+        self.password = password
+        self.enterprise = enterprise
+        self.base_uri = base_uri
+        self.api_version = 'v{}'.format(search(r'(\d+_\d+)', base_uri).group())
+
+
 class VsdClient(FWaaSMixin, SecurityGroupsMixin):
 
-    def __init__(self, vsd_server, user, password, enterprise, base_uri,
-                 cms_id):
-
-        # Connect to vsp with vspk
-        version = 'v{}'.format(search(r'(\d+_\d+)', base_uri).group())
-        self.vspk_helper = VspkHelper(vsd_server, user, password, enterprise,
-                                      version, cms_id)
+    def __init__(self, cms_id):
+        self.vspk_helper = VspkHelper(cms_id)
 
         # Init all base classes here
         FWaaSMixin.__init__(self, self.vspk_helper)
         SecurityGroupsMixin.__init__(self, self.vspk_helper)
+
+    def authenticate(self, credentials):
+        self.vspk_helper.authenticate(credentials)
+        return self

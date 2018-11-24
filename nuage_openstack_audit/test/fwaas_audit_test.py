@@ -16,22 +16,20 @@ from __future__ import print_function
 
 import mock
 import testtools
-from nuage_openstack_audit.test.utils.decorators import header
 
 # system under test
 from nuage_openstack_audit.main import Main  # system under test
-from nuage_openstack_audit.osclient.osclient import Neutron  # for mocking
+from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.osclient.osclient import OSCredentials  # reused
-from nuage_openstack_audit.osclient.osclient import Keystone  # reused
+from nuage_openstack_audit.test.utils.decorators import header
+from nuage_openstack_audit.test.utils.main_args import MainArgs
 from nuage_openstack_audit.test.utils.neutron_test_helper \
     import NeutronTestHelper
+from nuage_openstack_audit.test.utils.test_mixin import TestMixin
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
-
-from nuage_openstack_audit.test.utils.main_args import MainArgs
 
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/fwaas_audit_test.py
@@ -41,12 +39,14 @@ from nuage_openstack_audit.test.utils.main_args import MainArgs
 #            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
 
+USER = Reporter('USER')
+
 
 def get_nbr_firewalls_under_test():
     return int(Utils.get_env_var('OS_AUDIT_TEST_NR_FIREWALLS', 3))
 
 
-class FirewallAuditBase(testtools.TestCase):
+class FirewallAuditBase(testtools.TestCase, TestMixin):
 
     main = None
 
@@ -68,6 +68,7 @@ class FirewallAuditBase(testtools.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(FirewallAuditBase, cls).setUpClass()
         if not cls.nbr_firewalls:
             return  # done
 
@@ -87,18 +88,21 @@ class FirewallAuditBase(testtools.TestCase):
                                     cls.nbr_enabled_rules_per_fw)
         cls.nbr_fw_rules = cls.nbr_firewalls * cls.nbr_rules_per_fw
 
-        cls.neutron = NeutronTestHelper(Keystone(OSCredentials()))
+        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
-        print('\n===== Start of tests (%s) =====' % cls.__name__)
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
-            print('\n=== Creating %d firewalls ===' % cls.nbr_firewalls)
+            cls.neutron = NeutronTestHelper()
+            cls.neutron.authenticate(Main.get_os_credentials())
+
+            USER.report('\n=== Creating %d OpenStack firewalls ===',
+                        cls.nbr_firewalls)
             for f in range(cls.nbr_firewalls):
                 # create rules
                 fw_policy_rule_ids = []
                 admin_state_up = cls.admin_state_up()  # repeated query
-                print('Creating %d+1 rules for fw %s (admin %s)' % (
-                    cls.nbr_enabled_rules_per_fw, f,
-                    'up' if admin_state_up else 'down'))
+                print('Creating %d+1 OpenStack firewall rules for fw %s '
+                      '(admin %s)' % (cls.nbr_enabled_rules_per_fw, f,
+                                      'up' if admin_state_up else 'down'))
                 for r in range(cls.nbr_enabled_rules_per_fw):
                     rule = cls.neutron.create_firewall_rule()
                     cls.fw_rules.append(rule)
@@ -123,30 +127,35 @@ class FirewallAuditBase(testtools.TestCase):
                 else:
                     cls.nbr_firewalls_down += 1
 
-        print('\n=== Launching system under test')
+        USER.report('\n=== Launching system under test ===')
         cls.main = Main(MainArgs('fwaas'))
 
     @classmethod
     def tearDownClass(cls):
+        super(FirewallAuditBase, cls).tearDownClass()
         if not cls.nbr_firewalls:
             return  # done
 
-        print('\n===== End of tests (%s) =====' % cls.__name__)
+        USER.report('\n===== End of tests (%s) =====', cls.__name__)
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
 
-            print('\n=== Deleting %d firewalls ===' % len(cls.fws))
+            USER.report('\n=== Deleting %d OpenStack firewalls ===',
+                        len(cls.fws))
             for fw in cls.fws:
                 cls.neutron.delete_firewall(fw)
 
-            print('=== Deleting %d policies ===' % len(cls.fw_policies))
+            USER.report('=== Deleting %d OpenStack firewall policies ===',
+                        len(cls.fw_policies))
             for fw_policy in cls.fw_policies:
                 cls.neutron.delete_firewall_policy(fw_policy)
 
-            print('=== Deleting %d rules ===' % len(cls.fw_rules))
+            USER.report('=== Deleting %d OpenStack firewall rules ===',
+                        len(cls.fw_rules))
             for fw_rule in cls.fw_rules:
                 cls.neutron.delete_firewall_rule(fw_rule)
 
-            print('=== Deleting %d routers ===' % len(cls.routers))
+            USER.report('=== Deleting %d OpenStack routers ===',
+                        len(cls.routers))
             for router in cls.routers:
                 cls.neutron.delete_router(router)
 
@@ -154,20 +163,13 @@ class FirewallAuditBase(testtools.TestCase):
     def admin_state_up(cls):
         raise NotImplementedError
 
-    def assertEqual(self, expected, observed, message=''):
-        if expected != observed:
-            Reporter('WARN').report(
-                'FAIL: expected {}, got {}'.format(expected, observed))
-        super(FirewallAuditBase, self).assertEqual(
-            expected, observed, message)
-
     @header()
     def test_firewall_audit(self):
         audit_report, nbr_entities_in_sync = \
-            self.main.run() if self.main else ([], 0)
+            self.main.audit_fwaas() if self.main else ([], 0)
 
         # expecting zero discrepancies
-        self.assertEqual(0, len(audit_report))
+        self.assert_audit_report_length(0, audit_report)
 
         # expecting calculated entities in sync - keeping definition generic
         # so can be reused by derived classes
@@ -176,7 +178,9 @@ class FirewallAuditBase(testtools.TestCase):
             2 * self.nbr_firewalls_down +  # these have additional block acl
             self.nbr_firewall_policies +
             self.nbr_enabled_fw_rules)
-        self.assertEqual(expected_nbr_entities_in_sync, nbr_entities_in_sync)
+
+        self.assert_entities_in_sync(expected_nbr_entities_in_sync,
+                                     nbr_entities_in_sync)
 
 
 class AdminUpFirewallAuditTest(FirewallAuditBase):
@@ -192,40 +196,39 @@ class AdminUpFirewallAuditTest(FirewallAuditBase):
     @mock.patch.object(VsdClient, 'get_firewall_rules', return_value=[])
     @header()
     def test_firewall_audit_mocked_empty_vsd(self, *_):
-        audit_report, nbr_entities_in_sync = self.main.run()
+        audit_report, nbr_entities_in_sync = self.main.audit_fwaas()
 
         expected_fw_r_d = self.nbr_firewalls
         expected_acl_d = self.nbr_firewalls
         expected_rules_d = self.nbr_firewalls * self.nbr_enabled_rules_per_fw
-        self.assertEqual(
+        self.assert_audit_report_length(
             expected_fw_r_d + expected_acl_d + expected_rules_d,
-            len(audit_report))
+            audit_report)
         for discrepancy in audit_report:
-            self.assertEqual("ORPHAN_NEUTRON_ENTITY",
-                             discrepancy["discrepancy_type"])
+            self.assert_equal('ORPHAN_NEUTRON_ENTITY',
+                              discrepancy["discrepancy_type"])
 
-        # expecting 0 entities in sync
-        self.assertEqual(0, nbr_entities_in_sync)
+        self.assert_entities_in_sync(0, nbr_entities_in_sync)
 
-    @mock.patch.object(Neutron, 'get_firewalls', return_value=[])
-    @mock.patch.object(Neutron, 'get_firewall_policies', return_value=[])
-    @mock.patch.object(Neutron, 'get_firewall_rules', return_value=[])
+    @mock.patch.object(NeutronClient, 'get_firewalls', return_value=[])
+    @mock.patch.object(NeutronClient, 'get_firewall_policies', return_value=[])
+    @mock.patch.object(NeutronClient, 'get_firewall_rules', return_value=[])
     @header()
     def test_firewall_audit_mocked_empty_neutron(self, *_):
-        audit_report, nbr_entities_in_sync = self.main.run()
+        audit_report, nbr_entities_in_sync = self.main.audit_fwaas()
 
         expected_fw_r_d = self.nbr_firewalls
         expected_acl_d = self.nbr_firewalls
         expected_rules_d = self.nbr_firewalls * self.nbr_enabled_rules_per_fw
-        self.assertEqual(
+        self.assert_audit_report_length(
             expected_fw_r_d + expected_acl_d + expected_rules_d,
-            len(audit_report))
+            audit_report)
         for discrepancy in audit_report:
-            self.assertEqual("ORPHAN_VSD_ENTITY",
-                             discrepancy["discrepancy_type"])
+            self.assert_equal('ORPHAN_VSD_ENTITY',
+                              discrepancy["discrepancy_type"])
 
         # expecting 0 entities in sync
-        self.assertEqual(0, nbr_entities_in_sync)
+        self.assert_equal(0, nbr_entities_in_sync)
 
     def get_firewall_rules_with_action_deny(self, policy_id=None):
         # -- near-equal original method --
@@ -240,27 +243,28 @@ class AdminUpFirewallAuditTest(FirewallAuditBase):
             r['action'] = 'deny'
         return rules
 
-    @mock.patch.object(Neutron, 'get_firewall_rules',
+    @mock.patch.object(NeutronClient, 'get_firewall_rules',
                        get_firewall_rules_with_action_deny)
     @header()
     def test_firewall_audit_with_rules_having_action_mismatch(self):
-        audit_report, nbr_entities_in_sync = self.main.run()
+        audit_report, nbr_entities_in_sync = self.main.audit_fwaas()
 
         expected_rules_d = self.nbr_firewalls * self.nbr_enabled_rules_per_fw
-        self.assertEqual(expected_rules_d, len(audit_report))
+        self.assert_audit_report_length(expected_rules_d, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual("ENTITY_MISMATCH",
-                             discrepancy["discrepancy_type"])
-            self.assertEqual("Firewall rule", discrepancy["entity_type"])
-            self.assertEqual("('stateful', 'False != True'),"
-                             "('action', 'DROP != FORWARD')",
-                             discrepancy['discrepancy_details'])
+            self.assert_equal('ENTITY_MISMATCH',
+                              discrepancy['discrepancy_type'])
+            self.assert_equal('Firewall rule', discrepancy["entity_type"])
+            self.assert_equal("('stateful', 'False != True'),"
+                              "('action', 'DROP != FORWARD')",
+                              discrepancy['discrepancy_details'])
 
         # expecting calculated entities in sync
         expected_nbr_entities_in_sync = (
             self.nbr_firewalls +
             self.nbr_firewall_policies)
-        self.assertEqual(expected_nbr_entities_in_sync, nbr_entities_in_sync)
+        self.assert_entities_in_sync(expected_nbr_entities_in_sync,
+                                     nbr_entities_in_sync)
 
     def get_firewall_policies_with_reversed_rules(self):
         policies = self.client.list_firewall_policies()['firewall_policies']
@@ -268,25 +272,26 @@ class AdminUpFirewallAuditTest(FirewallAuditBase):
             policy['firewall_rules'] = reversed(policy['firewall_rules'])
         return policies
 
-    @mock.patch.object(Neutron, 'get_firewall_policies',
+    @mock.patch.object(NeutronClient, 'get_firewall_policies',
                        get_firewall_policies_with_reversed_rules)
     @header()
     def test_firewall_audit_with_reversed_rule_order_inside_policy(self):
-        audit_report, nbr_entities_in_sync = self.main.run()
+        audit_report, nbr_entities_in_sync = self.main.audit_fwaas()
 
         expected_rules_d = self.nbr_firewall_policies
-        self.assertEqual(expected_rules_d, len(audit_report))
+        self.assert_audit_report_length(expected_rules_d, audit_report)
         for discrepancy in audit_report:
-            self.assertEqual("ENTITY_MISMATCH",
-                             discrepancy["discrepancy_type"])
-            self.assertEqual("Firewall policy", discrepancy["entity_type"])
-            self.assertIn('rule_ids', discrepancy["discrepancy_details"])
+            self.assert_equal('ENTITY_MISMATCH',
+                              discrepancy["discrepancy_type"])
+            self.assert_equal('Firewall policy', discrepancy['entity_type'])
+            self.assert_in('rule_ids', discrepancy['discrepancy_details'])
 
         # expecting calculated entities in sync
         expected_nbr_entities_in_sync = (
             self.nbr_firewalls +
             self.nbr_enabled_fw_rules)
-        self.assertEqual(expected_nbr_entities_in_sync, nbr_entities_in_sync)
+        self.assert_entities_in_sync(expected_nbr_entities_in_sync,
+                                     nbr_entities_in_sync)
 
 
 class AdminDownFirewallAuditTest(FirewallAuditBase):

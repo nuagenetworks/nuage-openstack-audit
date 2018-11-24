@@ -16,13 +16,14 @@ from __future__ import print_function
 
 import testtools
 
-from nuage_openstack_audit.main import Main
+from nuage_openstack_audit.utils.logger import get_logger
 from nuage_openstack_audit.utils.logger import Reporter
-from nuage_openstack_audit.utils.utils import Utils
+from nuage_openstack_audit.test.utils.decorators import header
 
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/utils_test.py
 
+USER = Reporter('USER')
 WARN = Reporter('WARN')
 
 
@@ -30,22 +31,27 @@ class UtilsTest(testtools.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(UtilsTest, cls).setUpClass()
+        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
+
+        logger = get_logger()
+        logger.set_verbose(True)
+        logger.set_extreme_verbose(True)
+        logger.init_logging('DEBUG')
 
         WARN.h0('VERBOSE is forcibly set to TRUE')
         WARN.h0('Extreme VERBOSE is forcibly set to TRUE')
         WARN.h0('DEBUG is forcibly set to TRUE')
 
-        cls.main = Main(Utils.TestMainArgs('all', None, True, True, True))
-
     @classmethod
     def tearDownClass(cls):
+        super(UtilsTest, cls).tearDownClass()
+        USER.report('\n===== End of tests (%s) =====', cls.__name__)
+
         Reporter().newline()
 
-    def test_info(self):
-        Reporter('INFO').h1('[INFO] Bananas are ', end='').set_color(
-            Reporter.YELLOW).report('yellow', end='').endc().report(
-            ' and avocados are ', end='').set_color(
-            Reporter.GREEN).report('green', end='').endc()
-
-    def test_debug(self):
-        Reporter('DEBUG').h1('[DEBUG] Grapes are blue')
+    @header()
+    def test_reporting(self):
+        Reporter('INFO').h1('Avocados are ', end='').green('green')
+        Reporter('INFO').h1('Bananas are ', end='').yellow('yellow')
+        Reporter('DEBUG').h1('Grapes are blue')

@@ -14,10 +14,10 @@
 
 import neutronclient.common.exceptions as neutron_exceptions
 
-from nuage_openstack_audit.osclient.osclient import Neutron
+from nuage_openstack_audit.osclient.osclient import NeutronClient
 
 
-class NeutronTestHelper(Neutron):
+class NeutronTestHelper(NeutronClient):
 
     def create_router(self, name):
         return self.client.create_router(

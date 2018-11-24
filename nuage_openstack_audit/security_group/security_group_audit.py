@@ -30,20 +30,20 @@ from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPolicyGroupMatcher
 from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPortsPolicyGroupVportsMatcher
-
 from nuage_openstack_audit.utils.utils import Utils
+from nuage_openstack_audit.vsdclient.common import constants
 
+INFO = logger.Reporter('INFO')
+WARN = logger.Reporter('WARN')
 
-INFO = logger.Reporter()
-WARN = logger.Reporter(level='WARN')
-
-PG_FOR_LESS_SECURITY = 'PG_FOR_LESS_SECURITY'
-ACL_TEMPLATE_SOFTWARE = 'SOFTWARE'
-ACL_TEMPLATE_HARDWARE = 'HARDWARE'
+ACL_TEMPLATE_SOFTWARE = constants.SOFTWARE
+ACL_TEMPLATE_HARDWARE = constants.HARDWARE
 
 AUTO_CREATE_PORT_OWNERS = ['network:router_interface',
                            'network:router_gateway', 'network:floatingip',
                            'nuage:vip', 'compute:ironic', 'network:dhcp:nuage']
+
+PG_FOR_LESS_SECURITY = 'PG_FOR_LESS_SECURITY'
 
 
 class SecurityGroupAudit(Audit):
@@ -80,9 +80,9 @@ class SecurityGroupAudit(Audit):
                             - ethertype
                             - port range
                             - protocol
-                            - statefulnes (part of securitygroup)
+                            - statefulness (part of securitygroup)
          Note: acl_template_type signals whether the securitygroup is for
-              HARDWARE ( or SOFTWARE ports.
+              HARDWARE or SOFTWARE ports.
          """
 
         # Note that icmp rules represent both an ingress and egress acl entry
@@ -181,8 +181,7 @@ class SecurityGroupAudit(Audit):
                     'entity_type': 'subnet',
                     'neutron_entity': subnet_id,
                     'vsd_entity': None,
-                    'discrepancy_details': 'l2-subnet has no '
-                                           'l2-domain'})
+                    'discrepancy_details': 'l2-subnet has no l2-domain'})
             else:
                 self.audit_domain(domain, subnet_id, [subnet_id], is_l2=True)
 

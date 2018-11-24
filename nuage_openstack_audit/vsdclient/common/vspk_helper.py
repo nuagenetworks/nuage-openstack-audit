@@ -61,21 +61,24 @@ NURESTObject.send_request = RecreateSessionOnTimeout(NURESTObject.send_request)
 class VspkHelper(object):
     """Helper class for interfacing with vspk."""
 
-    def __init__(self, vsd_server, user, password,
-                 enterprise, vspk_version, cms_id):
-
+    def __init__(self, cms_id):
         self.cms_id = cms_id
+        self.session = None
+        self.default_enterprise = None
+        self.vspk = None
 
+    def authenticate(self, vsd_credentials):
         # Connect to VSP
         LOG.debug('Setting up vspk')
-        self.vspk = importlib.import_module('vspk.{}'.format(vspk_version))
-        self._session = self.vspk.NUVSDSession(
-            username=user,
-            password=password,
+        self.vspk = importlib.import_module('vspk.{}'.format(
+            vsd_credentials.api_version))
+        self.session = self.vspk.NUVSDSession(
+            username=vsd_credentials.user,
+            password=vsd_credentials.password,
             enterprise='csp',
-            api_url='https://{}'.format(vsd_server))
+            api_url='https://{}'.format(vsd_credentials.vsd_server))
         try:
-            self._session.start()
+            self.session.start()
         except Exception as e:
             LOG.debug('Failed connecting with VSD: %s', e)
             raise EnvironmentError('Could not connect with VSD.')
@@ -83,17 +86,18 @@ class VspkHelper(object):
             LOG.debug('Started vspk session')
 
         # Store default enterprise
-        self.default_enterprise = self._session.user.enterprises.get(
-            filter='name is "{}"'.format(enterprise))[0]
+        self.default_enterprise = self.session.user.enterprises.get(
+            filter='name is "{}"'.format(vsd_credentials.enterprise))[0]
         if not self.default_enterprise:
             raise EnvironmentError('Default enterprise %s '
-                                   'not found' % enterprise)
+                                   'not found' % vsd_credentials.enterprise)
+        return self
 
     def get_default_enterprise(self):
         return self.default_enterprise
 
     def get_user(self):
-        return self._session.user
+        return self.session.user
 
     def get_external_id(self, os_id):
         return '{}@{}'.format(os_id, self.cms_id)

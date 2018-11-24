@@ -39,61 +39,142 @@ class Main(object):
 
     def __init__(self, args=None):
 
+        # housekeeping & parse command line arguments
         self.initiating_time = time.strftime("%d-%m-%Y_%H:%M:%S")
 
         if not args:
             parser = argparse.ArgumentParser(prog=self.program,
                                              description=self.description)
-            parser.add_argument('-v', '--verbose', help='verbose output',
+            parser.add_argument('-v', '--verbose',
+                                help='run with verbose output',
                                 action="store_true")
-            parser.add_argument('-d', '--debug', help='log with debug level',
+            parser.add_argument('-d', '--debug',
+                                help='log with debug level',
                                 action="store_true")
-            parser.add_argument('-o', '--report', help='report file',
+            parser.add_argument('-o', '--report',
+                                help='specify the report file',
                                 default=None)
-            parser.add_argument('resource', help='resource to audit',
+            parser.add_argument('resource', help='resources to audit',
                                 choices=['fwaas', 'security_group', 'all'])
             args = parser.parse_args()
 
         self.developer_modus = self.check_developer_modus()
         self.debug = args.debug or self.developer_modus
         self.verbose = args.verbose
-        self.extreme_verbose = (hasattr(args, 'extreme_verbose') and
-                                args.extreme_verbose) or self.developer_modus
+        self.extreme_verbose = (
+            (hasattr(args, 'extreme_verbose') and
+             args.extreme_verbose) or self.developer_modus)
+        self.no_log = hasattr(args, 'no_log') and args.no_log
         self.report = args.report
         self.resource = args.resource
 
+        # retrieve credential info from environment variables
+        cms_id = self.get_cms_id()
+        os_credentials = self.get_os_credentials()
+        vsd_credentials = self.get_vsd_credentials()
+
+        # init logging
         self.init_logger(self.initiating_time)
+
+        # initialize and authenticate the clients
+        USER.h1('Authenticating with OpenStack')
+        self.neutron = self.get_neutron_client()
+        self.neutron.authenticate(os_credentials)
+
+        USER.h1('Authenticating with Nuage VSD')
+        self.vsd = self.get_vsd_client(cms_id)
+        self.vsd.authenticate(vsd_credentials)
+        self.cms_id = cms_id
+
+    def init_logger(self, initiating_time):
+        from nuage_openstack_audit.utils.logger import get_logger
+        logger = get_logger()
+        logger.set_verbose(self.verbose)
+        logger.set_extreme_verbose(self.extreme_verbose)
+
+        env_set_level = Utils.get_env_var(
+            'OS_AUDIT_LOG_LEVEL', 'INFO').upper()
+        level = 'DEBUG' if self.debug else env_set_level
+        self.debug = level == 'DEBUG'  # possibly correcting initial setting,
+        #                                based on env. log level setting
+
+        log_file = (self.expand_filename(
+            Utils.get_env_var('OS_AUDIT_LOG_DIR', '.'),
+            NUAGE_OPENSTACK_AUDIT_PREFIX + initiating_time, '.log')
+            if not self.no_log else None)
+
+        logger.init_logging(level, log_file)
+        if log_file:
+            USER.h0('Logfile created at %s', self.relative_filename(log_file))
+        if self.developer_modus:
+            WARN.report('Developer modus is on')
+        return logger
+
+    @staticmethod
+    def get_cms_id():
+        return Utils.get_env_var('OS_CMS_ID')
+
+    @staticmethod
+    def get_os_credentials():
+        from nuage_openstack_audit.osclient.osclient import OSCredentials
+
+        auth_url = Utils.get_env_var('OS_AUTH_URL')
+        username = Utils.get_env_var('OS_USERNAME')
+        project_name = Utils.get_env_var(
+            'OS_PROJECT_NAME', Utils.get_env_var('OS_TENANT_NAME', ''))
+        if not project_name:
+            Utils.env_error('OS_PROJECT_NAME nor OS_TENANT_NAME '
+                            'is defined. Please set either of both.')
+        password = Utils.get_env_var('OS_PASSWORD')
+        identity_api_version = int(
+            Utils.get_env_var('OS_IDENTITY_API_VERSION', 3))
+        user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID', '')
+        project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID', '')
+
+        return OSCredentials(
+            auth_url, username, password, project_name, identity_api_version,
+            user_domain_id, project_domain_id)
+
+    @staticmethod
+    def get_vsd_credentials():
+        from nuage_openstack_audit.vsdclient.vsdclient import VsdCredentials
+        user, password = Utils.get_env_var('OS_VSD_SERVER_AUTH',
+                                           'csproot:csproot').split(':')
+        return VsdCredentials(
+            vsd_server=Utils.get_env_var('OS_VSD_SERVER'),
+            user=user,
+            password=password,
+            base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
+            enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
+
+    def audit_fwaas(self):
+        from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
+        if not self.verbose:
+            USER.h1('Auditing Firewalls')  # redundant when verbose
+        return FWaaSAudit(self.neutron, self.vsd, self.cms_id).audit()
+
+    def audit_sg(self):
+        from nuage_openstack_audit.security_group.security_group_audit import \
+            SecurityGroupAudit
+        if not self.verbose:
+            USER.h1('Auditing Security Groups')  # redundant when verbose
+        return SecurityGroupAudit(self.neutron, self.vsd, self.cms_id).audit()
 
     def run(self):
         start_time = time.time()
+        audit_report = []
+        nbr_entities_in_sync = 0
         report_file = (self.report if self.report
                        else self.prep_report_name(self.initiating_time))
 
-        cms_id = Utils.get_env_var('OS_CMS_ID')
-
-        USER.h1('Authenticating with OpenStack')
-        neutron = self.create_neutron()
-
-        USER.h1('Authenticating with Nuage VSD')
-        vsd = self.create_vsd_client(cms_id)
-
         # -- all audit modules come here in right sequence --
-        audit_report = []
-        nbr_entities_in_sync = 0
-        USER.h1('Auditing')
-
         if 'fwaas' in self.resource or 'all' in self.resource:
-            from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
-            fwaas_audit_report, fwaas_in_sync_cnt = FWaaSAudit(
-                neutron, vsd, cms_id).audit()
+            fwaas_audit_report, fwaas_in_sync_cnt = self.audit_fwaas()
             audit_report += fwaas_audit_report
             nbr_entities_in_sync += fwaas_in_sync_cnt
 
         if 'security_group' in self.resource or 'all' in self.resource:
-            from nuage_openstack_audit.security_group.security_group_audit \
-                import SecurityGroupAudit
-            sg_audit_report, sg_in_sync_cnt = SecurityGroupAudit(
-                neutron, vsd, cms_id).audit()
+            sg_audit_report, sg_in_sync_cnt = self.audit_sg()
             audit_report += sg_audit_report
             nbr_entities_in_sync += sg_in_sync_cnt
         # -- end --
@@ -104,51 +185,14 @@ class Main(object):
         return audit_report, nbr_entities_in_sync
 
     @staticmethod
-    def create_neutron():
-        from nuage_openstack_audit.osclient.osclient import OSCredentials
-        os_credentials = OSCredentials()  # fail fast if there is env error
-
-        from nuage_openstack_audit.osclient.osclient import Keystone
-        from nuage_openstack_audit.osclient.osclient import Neutron
-
-        return Neutron(Keystone(os_credentials))
+    def get_neutron_client():
+        from nuage_openstack_audit.osclient.osclient import NeutronClient
+        return NeutronClient()
 
     @staticmethod
-    def create_vsd_client(cms_id):
+    def get_vsd_client(cms_id):
         from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
-
-        user, password = Utils.get_env_var('OS_VSD_SERVER_AUTH',
-                                           'csproot:csproot').split(':')
-        return VsdClient(
-            vsd_server=Utils.get_env_var('OS_VSD_SERVER'),
-            user=user,
-            password=password,
-            base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
-            cms_id=cms_id,
-            enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
-
-    def init_logger(self, initiating_time):
-        from nuage_openstack_audit.utils.logger import get_logger
-        logger = get_logger()
-        logger.set_verbose(self.verbose)
-        logger.set_extreme_verbose(self.extreme_verbose)
-
-        env_set_level = Utils.get_env_var('OS_AUDIT_LOG_LEVEL', 'INFO').upper()
-        level = 'DEBUG' if self.debug else env_set_level
-        self.debug = level == 'DEBUG'  # possibly correcting initial setting,
-        #                                based on env. log level setting
-
-        log_dir = Utils.get_env_var('OS_AUDIT_LOG_DIR', '.')
-        log_file = self.expand_filename(
-            log_dir, NUAGE_OPENSTACK_AUDIT_PREFIX + initiating_time, '.log')
-
-        logger.init_logging(level, log_file)
-        USER.h0('Logfile created at %s', self.relative_filename(log_file))
-        if self.developer_modus:
-            WARN.report('Developer modus is on')
-        else:
-            INFO.h0('Tracing is %s', level)
-        return logger
+        return VsdClient(cms_id)
 
     @staticmethod
     def check_developer_modus():

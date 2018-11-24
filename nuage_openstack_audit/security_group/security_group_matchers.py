@@ -12,11 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-
 from nuage_openstack_audit.utils.matcher import Matcher
 from nuage_openstack_audit.vsdclient.common import constants
-
-acl_template_hardware = 'HARDWARE'
 
 
 class SecurityGroupPolicyGroupMatcher(Matcher):
@@ -34,7 +31,7 @@ class SecurityGroupPolicyGroupMatcher(Matcher):
     @staticmethod
     def _map_name(sg):
         return (sg['id'] + '_HARDWARE'
-                if sg['type'] == acl_template_hardware else sg['id'])
+                if sg['type'] == constants.HARDWARE else sg['id'])
 
     @staticmethod
     def _map_description(sg):

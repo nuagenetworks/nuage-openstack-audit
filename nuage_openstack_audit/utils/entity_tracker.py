@@ -13,7 +13,6 @@
 #    under the License.
 
 import abc
-import pprint
 import six
 
 from nuage_openstack_audit.utils.logger import Reporter
@@ -80,8 +79,7 @@ class ListingEntityTracker(EntityTracker):
     def _report_entities(entities):
         INFO.set_color(INFO.BLUE)
         for e in entities:
-            INFO.h0(pprint.pformat(e.to_dict() if hasattr(e, 'to_dict') else e,
-                                   indent=2)).newline()
+            INFO.pprint(e.to_dict() if hasattr(e, 'to_dict') else e).newline()
         INFO.endc()
 
     def report(self, text='%d %s found', level='INFO', header='h2'):

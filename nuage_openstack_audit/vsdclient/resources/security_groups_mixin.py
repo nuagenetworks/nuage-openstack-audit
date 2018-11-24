@@ -42,7 +42,8 @@ class SecurityGroupsMixin(object):
         return VspkHelper.get_all(by_domain, "ingress_acl_entry_templates",
                                   **kwargs)
 
-    def get_acl_entry_filter(self, by_policy_group_id, cms_id):
+    @staticmethod
+    def get_acl_entry_filter(by_policy_group_id, cms_id):
         if by_policy_group_id:
             vspk_filter = ('locationType IS "POLICYGROUP" AND '
                            'locationID IS "{}" '.format(by_policy_group_id))
@@ -107,7 +108,8 @@ class SecurityGroupsMixin(object):
             filter=vspk_filter,
             fetcher_str="vports")
 
-    def get_policy_groups(self, domain, vspk_filter=None):
+    @staticmethod
+    def get_policy_groups(domain, vspk_filter=None):
         return VspkHelper.get_all(
             parent=domain,
             filter=vspk_filter,

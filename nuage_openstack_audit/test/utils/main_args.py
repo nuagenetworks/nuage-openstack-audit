@@ -23,18 +23,17 @@ EXTREME_VERBOSE = Utils.get_env_bool('OS_AUDIT_EXTREME_VERBOSE')
 LOG_LEVEL = Utils.get_env_var('OS_AUDIT_LOG_LEVEL', 'INFO')
 DEBUG = 'debug' in LOG_LEVEL.lower()
 
-
-USER.set_color(USER.BLUE)
 if DEVELOPER_MODUS:
-    USER.report('Developer modus is on, '
-                'which implies debug & extreme verbose')
+    USER.blue('Developer modus is on, '
+              'which implies debug & extreme verbose')
 else:
-    USER.report('VERBOSE is %s, set OS_AUDIT_VERBOSE to change', VERBOSE)
+    USER.blue('VERBOSE is %s, set OS_AUDIT_VERBOSE to change', VERBOSE)
     if VERBOSE or EXTREME_VERBOSE:
-        USER.report('Extreme VERBOSE is %s, '
-                    'set OS_AUDIT_EXTREME_VERBOSE to change', EXTREME_VERBOSE)
-    USER.report('DEBUG is %s, set OS_AUDIT_LOG_LEVEL to change', DEBUG)
-USER.set_color(USER.ENDC).newline()
+        USER.blue('Extreme VERBOSE is %s, '
+                  'set OS_AUDIT_EXTREME_VERBOSE to change', EXTREME_VERBOSE)
+    USER.blue('DEBUG is %s, set OS_AUDIT_LOG_LEVEL to change', DEBUG)
+
+USER.newline()
 
 
 class MainArgs(object):
@@ -43,6 +42,7 @@ class MainArgs(object):
 
         self.resource = resource
         self.report = report
+        self.no_log = True  # no log files as part of testing
         self.verbose = VERBOSE
         self.extreme_verbose = EXTREME_VERBOSE
         self.debug = DEBUG
