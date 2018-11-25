@@ -14,6 +14,7 @@
 
 import os
 from oslo_utils import uuidutils
+import traceback
 
 
 class Utils(object):
@@ -21,6 +22,10 @@ class Utils(object):
     @staticmethod
     def env_error(msg, *args):
         raise EnvironmentError((msg % tuple(args)) if args else msg)
+
+    @staticmethod
+    def report_traceback(reporter):
+        reporter.report(traceback.format_exc())
 
     @staticmethod
     def get_env_var(name, default=None):
@@ -37,7 +42,8 @@ class Utils(object):
 
     @staticmethod
     def get_env_bool(name, default=False):
-        return str(Utils.get_env_var(name, default)).lower() == 'true'
+        return (str(Utils.get_env_var(name, default)).lower()
+                in ['t', 'true', 'yes', 'y', '1'])
 
     @staticmethod
     def is_uuid(uuid):

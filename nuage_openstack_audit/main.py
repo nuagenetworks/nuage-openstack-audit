@@ -80,6 +80,7 @@ class Main(object):
         # -- all audit modules come here in right sequence --
         audit_report = []
         nbr_entities_in_sync = 0
+        USER.h1('Auditing')
 
         if 'fwaas' in self.resource or 'all' in self.resource:
             from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
@@ -193,13 +194,26 @@ class Main(object):
 
 
 def main():
+    audit_main = None
     try:
-        Main().run()
+        audit_main = Main()
+        audit_report, _ = audit_main.run()
+        if not audit_report:
+            return 0
 
     except Exception as e:
-        ERROR.h0('ERROR: %s', e)
-        exit(1)
+        if audit_main and audit_main.developer_modus:
+            Utils.report_traceback(ERROR)
+        else:
+            ERROR.h0('ERROR: %s', e)
+
+    # set exit code to 1 or error or when discrepancies found
+    # -> allows for shell commands like:
+    # $ nuage-openstack-audit all >/dev/null
+    # $ if [[($? == 0)]]; then echo "OK"; else echo "NOK"; fi
+
+    return 1
 
 
 if __name__ == '__main__':
-    main()
+    exit(main())

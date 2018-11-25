@@ -86,7 +86,7 @@ class Keystone(object):
 
         except (AuthorizationFailure, KeyStoneAuthorizationFailure,
                 Unauthorized) as e:
-            Utils.env_error('Authentication failure: ' + str(e))
+            Utils.env_error('Authentication failure: %s', str(e))
 
 
 class Neutron(object):
