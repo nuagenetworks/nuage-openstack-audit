@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from collections import Counter
+
 from nuage_openstack_audit.audit import Audit
 import nuage_openstack_audit.vsdclient.common.constants as constants
 from nuage_openstack_audit.security_group.security_group_matchers \
@@ -26,12 +28,12 @@ class PGForLessAudit(Audit):
         self.neutron = neutron
         self.vsd = vsd
         self.audit_report = []
-        self.cnt_in_sync = 0
+        self.cnt_in_sync = Counter()
 
     def audit(self, domain, policygroups, ports):
 
         self.audit_report = []
-        self.cnt_in_sync = 0
+        self.cnt_in_sync = Counter()
 
         nr_policygroups = len(policygroups)
         if nr_policygroups == 0:
@@ -44,6 +46,7 @@ class PGForLessAudit(Audit):
                     'discrepancy_details': 'No Policy Group for less security '
                                            'found while ports with no port '
                                            'security exist.'})
+            return self.audit_report, self.cnt_in_sync
 
         vports = []
         for pg in policygroups:
@@ -57,7 +60,7 @@ class PGForLessAudit(Audit):
                 domain, 'egress_acl_entry_templates',
                 self.vsd.get_egress_acl_entries, pg.id)
             vports.extend(self.vsd.get_vports(pg))
-        self.cnt_in_sync += self.audit_entities(
+        self.cnt_in_sync['vports (PG_FOR_LESS)'] += self.audit_entities(
             self.audit_report, ports, vports,
             SecurityGroupPortsPolicyGroupVportsMatcher())
 
@@ -80,18 +83,22 @@ class PGForLessAudit(Audit):
                     'entity_type': entity_type,
                     'neutron_entity': None,
                     'vsd_entity': entry.id,
-                    'discrepancy_details': 'Invalid ether_type'
+                    'discrepancy_details': 'Policy group for less security ACL'
+                                           ' has an entry with invalid'
+                                           ' ether_type'
                 })
 
         # IPV4: Check that there is a sole entry which is allowing all traffic
         self._check_sole_allow_all_entry(acl_entries_ipv4, entity_type,
-                                         policygroup_id)
+                                         policygroup_id,
+                                         constants.OS_IPV4_ETHERTYPE)
         # IPV6: Check that there is a sole entry which is allowing all traffic
         self._check_sole_allow_all_entry(acl_entries_ipv6, entity_type,
-                                         policygroup_id)
+                                         policygroup_id,
+                                         constants.OS_IPV6_ETHERTYPE)
 
     def _check_sole_allow_all_entry(self, acl_entries, entity_type_name,
-                                    policygroup_id):
+                                    policygroup_id, ether_type):
         entry_cnt = len(acl_entries)
 
         # No entries
@@ -101,8 +108,9 @@ class PGForLessAudit(Audit):
                 'entity_type': 'policy group',
                 'neutron_entity': None,
                 'vsd_entity': policygroup_id,
-                'discrepancy_details': 'Policy group for less security '
-                                       'has missing rules'})
+                'discrepancy_details': 'Policy group for less security ACL has'
+                                       ' missing entries for '
+                                       '{}'.format(ether_type)})
             return
 
         # Too many entries
@@ -114,8 +122,9 @@ class PGForLessAudit(Audit):
                     'entity_type': entity_type_name,
                     'neutron_entity': None,
                     'vsd_entity': orphan.id,
-                    'discrepancy_details': 'Policy group for less security '
-                                           'has too many rules'})
+                    'discrepancy_details': 'Policy group for less security ACL'
+                                           ' has too many entries for '
+                                           '{}'.format(ether_type)})
 
         # Check the acl entry with highest priority
         entry = acl_entries[0]
@@ -129,7 +138,8 @@ class PGForLessAudit(Audit):
                 'entity_type': entity_type_name,
                 'neutron_entity': None,
                 'vsd_entity': entry.id,
-                'discrepancy_details': 'Invalid rule'
+                'discrepancy_details': 'Invalid {} entry in policy group for'
+                                       ' less security ACL'.format(ether_type)
             })
         else:
-            self.cnt_in_sync += 1
+            self.cnt_in_sync['{} (PG_FOR_LESS)'.format(entity_type_name)] += 1

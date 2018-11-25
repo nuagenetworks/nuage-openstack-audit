@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from collections import Counter
+
 from nuage_openstack_audit.audit import Audit
 
 
@@ -24,7 +26,7 @@ class HardwarePGAudit(Audit):
         self.vsd = vsd
 
         self.audit_report = []
-        self.cnt_in_sync = 0
+        self.cnt_in_sync = Counter()
 
     def audit_default_block_all_acl(self, domain, os_id):
         """A block all acl with lowest priority should exist"""
@@ -98,11 +100,11 @@ class HardwarePGAudit(Audit):
                     'Invalid rule for hardware block-all acl'
             })
             return False
-        self.cnt_in_sync += 1
+        self.cnt_in_sync['egress_acl_entry_templates (hardware)'] += 1
         return True
 
     def audit(self, domain, os_id):
-        self.cnt_in_sync = 0
+        self.cnt_in_sync = Counter()
         self.audit_report = []
         self.audit_default_block_all_acl(domain, os_id)
         return self.audit_report, self.cnt_in_sync

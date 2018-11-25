@@ -12,12 +12,16 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from collections import Counter
+import six
+import testtools
+
 from nuage_openstack_audit.utils.logger import Reporter
 
 WARN = Reporter('WARN')
 
 
-class TestMixin(object):
+class TestBase(testtools.TestCase):
 
     @staticmethod
     def check_in(needle, haystack, message='Expected {} be in {}'):
@@ -54,5 +58,7 @@ class TestMixin(object):
             self.assert_equal(expected_length, actual_length)
 
     def assert_entities_in_sync(self, expected, observed):
-        self.assert_equal(expected, observed,
+        self.assert_equal(expected,
+                          sum(six.itervalues(observed)) if isinstance(
+                              observed, Counter) else observed,
                           'Expected {} entities in sync, got {}')

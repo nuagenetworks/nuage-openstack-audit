@@ -15,6 +15,7 @@
 import argparse
 import json
 import os
+import six
 import time
 
 from nuage_openstack_audit.utils.developer import DeveloperModus
@@ -176,7 +177,7 @@ class Main(object):
         if 'security_group' in self.resource or 'all' in self.resource:
             sg_audit_report, sg_in_sync_cnt = self.audit_sg()
             audit_report += sg_audit_report
-            nbr_entities_in_sync += sg_in_sync_cnt
+            nbr_entities_in_sync += sum(six.itervalues(sg_in_sync_cnt))
         # -- end --
 
         self.end_report(report_file, audit_report, nbr_entities_in_sync)
