@@ -126,7 +126,7 @@ class Main(object):
             Utils.env_error('OS_PROJECT_NAME nor OS_TENANT_NAME '
                             'is defined. Please set either of both.')
         password = Utils.get_env_var('OS_PASSWORD')
-        identity_api_version = int(
+        identity_api_version = float(  # deal with version '2.0' e.g.
             Utils.get_env_var('OS_IDENTITY_API_VERSION', 3))
         user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID', '')
         project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID', '')
