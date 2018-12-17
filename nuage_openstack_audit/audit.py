@@ -28,19 +28,10 @@ class Audit(object):
         self.vspk_filter = "externalID ENDSWITH '@{}'".format(cms_id)
 
     @staticmethod
-    def get_cms_id(external_id):
-        split_ext_id = external_id.split('@') if external_id else []
-        return split_ext_id[1] if len(split_ext_id) > 1 else None
-
-    @staticmethod
     def strip_cms_id(external_id):
         return external_id.split('@')[0] if external_id else external_id
 
     # ---
-
-    @staticmethod
-    def get_vsd_entity_cms_id(vsd_entity):
-        return Audit.get_cms_id(vsd_entity.external_id)
 
     @staticmethod
     def vsd_entity_to_neutron_id(vsd_entity):

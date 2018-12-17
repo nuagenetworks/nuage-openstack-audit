@@ -83,20 +83,12 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
             'protocol': self._map_protocol(sg_rule, protocol),
             'stateful': self._map_stateful(sg_rule, protocol),
             'network_type': self._map_network_type(sg_rule, remote_ip_prefix),
+            'network_id': self._map_network_id(sg_rule, remote_ip_prefix),
             'location_type': self._map_location_type(sg_rule),
             'location_id': self._map_location_id(sg_rule),
             'action': self._map_action(sg_rule),
             'dscp': self._map_dscp(sg_rule),
         }
-
-        # Network ID
-        if remote_ip_prefix or any(sg_rule.get(key) for key in
-                                   ['remote_group_id',
-                                    'remote_external_group']):
-            network_id = self._map_network_id(sg_rule, remote_ip_prefix)
-            vsd_obj.update({'network_id': network_id})
-        else:
-            vsd_obj.update({'network_id': None})  # TODO verify me
 
         # TCP and UDP attributes
         if protocol in ['tcp', 'udp']:

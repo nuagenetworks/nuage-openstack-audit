@@ -28,11 +28,14 @@ class SecurityGroupsMixin(object):
         self.vspk_helper = vspk_helper
 
     def get_domains(self, ent=None, vspk_filter=None):
-        return VspkHelper.get_all(
-            parent=self.vspk_helper.get_default_enterprise()
-            if ent is None else ent,
-            filter=vspk_filter,
-            fetcher_str="domains")
+        for fetcher_str in ['domains', 'l2_domains']:
+            domains = VspkHelper.get_all(
+                parent=self.vspk_helper.get_default_enterprise()
+                if ent is None else ent,
+                filter=vspk_filter,
+                fetcher_str=fetcher_str)
+            for domain in domains:
+                yield domain
 
     def get_ingress_acl_entries(self, by_domain=None,
                                 by_policy_group_id=None,

@@ -15,7 +15,6 @@
 from __future__ import print_function
 
 import mock
-import testtools
 
 # system under test
 from nuage_openstack_audit.main import Main  # system under test
@@ -25,9 +24,9 @@ from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 # test code
 from nuage_openstack_audit.test.utils.decorators import header
 from nuage_openstack_audit.test.utils.main_args import MainArgs
-from nuage_openstack_audit.test.utils.neutron_test_helper \
-    import NeutronTestHelper
-from nuage_openstack_audit.test.utils.test_mixin import TestMixin
+from nuage_openstack_audit.test.utils.neutron_topology \
+    import NeutronTopology
+from nuage_openstack_audit.test.test_base import TestBase
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
@@ -46,7 +45,7 @@ def get_nbr_firewalls_under_test():
     return int(Utils.get_env_var('OS_AUDIT_TEST_NR_FIREWALLS', 3))
 
 
-class FirewallAuditBase(testtools.TestCase, TestMixin):
+class FirewallAuditBase(TestBase):
 
     main = None
 
@@ -91,7 +90,7 @@ class FirewallAuditBase(testtools.TestCase, TestMixin):
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
-            cls.neutron = NeutronTestHelper()
+            cls.neutron = NeutronTopology()
             cls.neutron.authenticate(Main.get_os_credentials())
 
             USER.report('\n=== Creating %d OpenStack firewalls ===',
@@ -138,26 +137,7 @@ class FirewallAuditBase(testtools.TestCase, TestMixin):
 
         USER.report('\n===== End of tests (%s) =====', cls.__name__)
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
-
-            USER.report('\n=== Deleting %d OpenStack firewalls ===',
-                        len(cls.fws))
-            for fw in cls.fws:
-                cls.neutron.delete_firewall(fw)
-
-            USER.report('=== Deleting %d OpenStack firewall policies ===',
-                        len(cls.fw_policies))
-            for fw_policy in cls.fw_policies:
-                cls.neutron.delete_firewall_policy(fw_policy)
-
-            USER.report('=== Deleting %d OpenStack firewall rules ===',
-                        len(cls.fw_rules))
-            for fw_rule in cls.fw_rules:
-                cls.neutron.delete_firewall_rule(fw_rule)
-
-            USER.report('=== Deleting %d OpenStack routers ===',
-                        len(cls.routers))
-            for router in cls.routers:
-                cls.neutron.delete_router(router)
+            cls.neutron.teardown()
 
     @classmethod
     def admin_state_up(cls):

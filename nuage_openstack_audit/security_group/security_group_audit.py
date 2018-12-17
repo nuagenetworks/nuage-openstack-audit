@@ -13,7 +13,7 @@
 #    under the License.
 
 from __future__ import print_function
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import six
 
@@ -56,7 +56,7 @@ class SecurityGroupAudit(Audit):
         self.cms_id = cms_id
 
         self.audit_report = []
-        self.cnt_in_sync = 0
+        self.cnt_in_sync = Counter()
 
     @TimeIt.timeit
     def audit_security_group_rules(self, domain, neutron_sg, vsd_pg_id,
@@ -133,20 +133,22 @@ class SecurityGroupAudit(Audit):
                          else (lambda r: r['id']))
 
         INFO.h1('Auditing egress security group rules')
-        self.cnt_in_sync += self.audit_entities(
+        in_sync_count = self.audit_entities(
             self.audit_report,
             egress_sg_rules,
             ingress_acl_entries,
             matcher,
             external_id_getter=get_sg_ext_id)
+        self.cnt_in_sync['ingress_acl_entry_templates'] += in_sync_count
 
         INFO.h1('Auditing ingress security group rules')
-        self.cnt_in_sync += self.audit_entities(
+        in_sync_count = self.audit_entities(
             self.audit_report,
             ingress_sg_rules,
             egress_acl_entries,
             matcher,
             external_id_getter=get_sg_ext_id)
+        self.cnt_in_sync['egress_acl_entry_templates'] += in_sync_count
 
     @TimeIt.timeit
     def audit_security_groups(self):
@@ -213,7 +215,7 @@ class SecurityGroupAudit(Audit):
         """Compare set of sg_ports with set of pg_vports"""
         vports = self.vsd.get_vports(parent=policygroup)
         ports = sg_to_ports[securitygroup['id']][1]
-        self.cnt_in_sync += self.audit_entities(
+        self.cnt_in_sync['vports'] += self.audit_entities(
             self.audit_report, ports, vports,
             SecurityGroupPortsPolicyGroupVportsMatcher())
 
@@ -255,15 +257,15 @@ class SecurityGroupAudit(Audit):
             SecurityGroupPolicyGroupMatcher(),
             external_id_getter=self.get_sg_ext_id,
             on_in_sync=on_in_sync)
-        self.cnt_in_sync += nr_in_sync
+        self.cnt_in_sync['policygroups'] += nr_in_sync
 
         # audit hardware policy group if needed
         if any(map(lambda x: x[0]['type'] == ACL_TEMPLATE_HARDWARE,
                    sg_to_ports.values())):
-            my_report, my_cnt = HardwarePGAudit(
+            my_report, my_counter = HardwarePGAudit(
                 self.neutron, self.vsd, self.cms_id).audit(domain, os_id)
             self.audit_report += my_report
-            self.cnt_in_sync += my_cnt
+            self.cnt_in_sync += my_counter
 
         # audit PG_FOR_LESS_SECURITY if needed
         for template_type in [ACL_TEMPLATE_HARDWARE, ACL_TEMPLATE_SOFTWARE]:
@@ -390,6 +392,28 @@ class SecurityGroupAudit(Audit):
 
     def audit(self):
         self.audit_report = []
-        self.cnt_in_sync = 0
+
+        # cnt_in_sync counts VSD entities that are in valid, elements are:
+        #  - Number of acl entry templates related to PG_FOR_LESS
+        #     'ingress_acl_entry_templates (PG_FOR_LESS)'
+        #     'egress_acl_entry_templates (PG_FOR_LESS)'
+        #
+        #  - Number of vports in PG_FOR_LESS
+        #     'vports (PG_FOR_LESS)'
+        #
+        #  - Number of acl entries related to default hardware block-all acl
+        #     'egress_acl_entry_templates (hardware)'
+        #
+        #  - other acl entry templates
+        #     'ingress_acl_entry_templates'
+        #     'egress_acl_entry_templates'
+        #
+        #  - other policygroups
+        #     'policygroups'
+        #
+        #  - other vports
+        #     'vports'
+        self.cnt_in_sync = Counter()
+
         self.audit_security_groups()
         return self.audit_report, self.cnt_in_sync
