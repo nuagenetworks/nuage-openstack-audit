@@ -49,6 +49,9 @@ class NeutronTopology(object):
         #     'ports_no_security'
         self.counter = Counter()
 
+    def authenticate(self, credentials):
+        self.neutron.authenticate(credentials)
+
     def teardown(self):
         """Cleanup of created topology"""
         USER.report('=== Teardown of OpenStack test topology ===')
