@@ -38,7 +38,141 @@ WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
 
-# TODO(Tom) Check discrepancies with correctness of ID
+
+class Topology1(NeutronTopology):
+    def __init__(self):
+        super(Topology1, self).__init__()
+
+        # vsd entities
+        self.vsd = VSDTestHelper(SystemUnderTest.get_cms_id())
+        self.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
+
+        USER.report('\n=== Creating VSD gateway resources ===')
+        self.gateway = self.vsd.create_gateway(name='vsg',
+                                               system_id='my-sys_id',
+                                               personality='VSG')
+        self.gw_port1 = self.vsd.create_gateway_port(self.gateway,
+                                                     name='gw-port-1',
+                                                     user_mnemonic='gw-port-1',
+                                                     vlan_range='0-4095',
+                                                     physical_name='gw-port-1',
+                                                     port_type='ACCESS')
+        self.gw_port2 = self.vsd.create_gateway_port(self.gateway,
+                                                     name='gw-port-2',
+                                                     user_mnemonic='gw-port-2',
+                                                     vlan_range='0-4095',
+                                                     physical_name='gw-port-2',
+                                                     port_type='ACCESS')
+
+        # neutron entities
+        self.authenticate(SystemUnderTest.get_os_credentials())
+
+        USER.report('=== Creating OpenStack router & networks ===')
+        self.router = self.create_router(name='test-router')
+
+        self.networkl3 = self.create_network(name='test-networkl3')
+        self.networkl2 = self.create_network(name='test-networkl2')
+        self.subnetl3 = self.create_subnet_l3(
+            network_id=self.networkl3['id'],
+            ip_version=4,
+            cidr='10.0.0.0/24')
+        self.subnetl2 = self.create_subnet_l2(
+            network_id=self.networkl2['id'],
+            ip_version=4,
+            cidr='10.0.0.0/24')
+        self.create_router_interface(router_id=self.router['id'],
+                                     subnet_id=self.subnetl3['id'])
+
+        USER.report('=== Creating OpenStack security-group and rules ===')
+
+        # a sg with no representation on vsd that should not influence things
+        self.create_security_group_unused(
+            name="test-sg-no-representation")
+
+        self.sg = self.create_security_group_used(name="test-sg")
+        self.remote_sg = self.create_security_group_remote_used(
+            name="test-remote-sg")
+        self.sg_rule = self.create_security_group_rule_stateful(
+            protocol='icmp', security_group_id=self.sg['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_ip_prefix='0.0.0.0/0')
+
+        self.sg_rule_remote_group_id = \
+            self.create_security_group_rule_stateful(
+                protocol='icmp', security_group_id=self.sg['id'],
+                ethertype='IPv4', direction='ingress',
+                remote_group_id=self.remote_sg['id'])
+
+        self.sg_hw_port = self.create_security_group_used(
+            name="test-sg-hw")
+        self.sg_rule_hw = self.create_security_group_rule_stateless(
+            protocol='icmp', security_group_id=self.sg_hw_port['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_ip_prefix='0.0.0.0/0')
+
+        # Ports
+        USER.report('=== Creating OpenStack ports ===')
+        # l3
+        self.normal_portl3 = self.create_port(
+            self.networkl3, security_groups=[self.sg['id']],
+            name='normal_port1')
+        self.normal_port2l3 = self.create_port(
+            self.networkl3, security_groups=[self.sg['id']],
+            name='normal_port2')
+        self.normal_port_no_securityl3 = self.create_port(
+            self.networkl3, port_security_enabled=False,
+            name='normal_port_no_security')
+        self.normal_port_no_securityl3_2 = self.create_port(
+            self.networkl3, port_security_enabled=False,
+            name='normal_port_no_security')
+        hw_port_args = {
+            'name': 'hw-port',
+            'security_groups': [self.sg_hw_port['id']],
+            'binding:vnic_type': 'baremetal',
+            'binding:host_id': 'dummy',
+            'binding:profile': {
+                "local_link_information": [
+                    {"port_id": self.gw_port1.name,
+                     "switch_info": self.gateway.system_id}]
+            }}
+        self.hw_port_l3 = self.create_port(self.networkl3, **hw_port_args)
+
+        # Normal ports l2
+        self.normal_portl2 = self.create_port(
+            self.networkl2, security_groups=[self.sg['id']],
+            name='normal_port1')
+        self.normal_port2l2 = self.create_port(
+            self.networkl2, security_groups=[self.sg['id']],
+            name='normal_port2')
+        self.normal_port_no_securityl2 = self.create_port(
+            self.networkl2, port_security_enabled=False,
+            name='normal_port_no_security')
+        self.normal_port_no_securityl2_2 = self.create_port(
+            self.networkl2, port_security_enabled=False,
+            name='normal_port_no_security')
+
+        hw_port_args = {
+            'name': 'hw-port',
+            'security_groups': [self.sg_hw_port['id']],
+            'binding:vnic_type': 'baremetal',
+            'binding:host_id': 'dummy',
+            'binding:profile': {
+                "local_link_information": [
+                    {"port_id": self.gw_port2.name,
+                     "switch_info": self.gateway.system_id}]
+            }}
+        self.hw_port_l2 = self.create_port(self.networkl2, **hw_port_args)
+
+        self.pg_for_less_active = True
+        self.hardware_port = True
+
+    def teardown(self):
+        super(Topology1, self).teardown()
+
+        USER.report('=== Deleting VSD gateway resources ===')
+        self.gw_port1.delete()
+        self.gw_port2.delete()
+        self.gateway.delete()
 
 
 class SgAuditTest(TestBase):
@@ -55,130 +189,7 @@ class SgAuditTest(TestBase):
         super(SgAuditTest, cls).setUpClass()
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
-        # vsd entities
-        cls.vsd = VSDTestHelper(SystemUnderTest.get_cms_id())
-        cls.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
-
-        USER.report('\n=== Creating VSD gateway resources ===')
-        cls.gateway = cls.vsd.create_gateway(name='vsg', system_id='my-sys_id',
-                                             personality='VSG')
-        cls.gw_port1 = cls.vsd.create_gateway_port(cls.gateway,
-                                                   name='gw-port-1',
-                                                   user_mnemonic='gw-port-1',
-                                                   vlan_range='0-4095',
-                                                   physical_name='gw-port-1',
-                                                   port_type='ACCESS')
-        cls.gw_port2 = cls.vsd.create_gateway_port(cls.gateway,
-                                                   name='gw-port-2',
-                                                   user_mnemonic='gw-port-2',
-                                                   vlan_range='0-4095',
-                                                   physical_name='gw-port-2',
-                                                   port_type='ACCESS')
-
-        # neutron entities
-        cls.os_topology = NeutronTopology()
-        cls.os_topology.authenticate(SystemUnderTest.get_os_credentials())
-
-        USER.report('=== Creating OpenStack router & networks ===')
-        cls.router = cls.os_topology.create_router(name='test-router')
-
-        cls.networkl3 = cls.os_topology.create_network(name='test-networkl3')
-        cls.networkl2 = cls.os_topology.create_network(name='test-networkl2')
-        cls.subnetl3 = cls.os_topology.create_subnet_l3(
-            network_id=cls.networkl3['id'],
-            ip_version=4,
-            cidr='10.0.0.0/24')
-        cls.subnetl2 = cls.os_topology.create_subnet_l2(
-            network_id=cls.networkl2['id'],
-            ip_version=4,
-            cidr='10.0.0.0/24')
-        cls.os_topology.create_router_interface(router_id=cls.router['id'],
-                                                subnet_id=cls.subnetl3['id'])
-
-        USER.report('=== Creating OpenStack security-group and rules ===')
-
-        # a sg with no representation on vsd that should not influence things
-        cls.os_topology.create_security_group_unused(
-            name="test-sg-no-representation")
-
-        cls.sg = cls.os_topology.create_security_group_used(name="test-sg")
-        cls.remote_sg = cls.os_topology.create_security_group_remote_used(
-            name="test-remote-sg")
-        cls.sg_rule = cls.os_topology.create_security_group_rule_stateful(
-            protocol='icmp', security_group_id=cls.sg['id'],
-            ethertype='IPv4', direction='ingress',
-            remote_ip_prefix='0.0.0.0/0')
-
-        cls.sg_rule_remote_group_id = \
-            cls.os_topology.create_security_group_rule_stateful(
-                protocol='icmp', security_group_id=cls.sg['id'],
-                ethertype='IPv4', direction='ingress',
-                remote_group_id=cls.remote_sg['id'])
-
-        cls.sg_hw_port = cls.os_topology.create_security_group_used(
-            name="test-sg-hw")
-        cls.sg_rule_hw = cls.os_topology.create_security_group_rule_stateless(
-            protocol='icmp', security_group_id=cls.sg_hw_port['id'],
-            ethertype='IPv4', direction='ingress',
-            remote_ip_prefix='0.0.0.0/0')
-
-        # Ports
-        USER.report('=== Creating OpenStack ports ===')
-        # l3
-        cls.normal_portl3 = cls.os_topology.create_port(
-            cls.networkl3, security_groups=[cls.sg['id']],
-            name='normal_port1')
-        cls.normal_port2l3 = cls.os_topology.create_port(
-            cls.networkl3, security_groups=[cls.sg['id']],
-            name='normal_port2')
-        cls.normal_port_no_securityl3 = cls.os_topology.create_port(
-            cls.networkl3, port_security_enabled=False,
-            name='normal_port_no_security')
-        cls.normal_port_no_securityl3_2 = cls.os_topology.create_port(
-            cls.networkl3, port_security_enabled=False,
-            name='normal_port_no_security')
-        hw_port_args = {
-            'name': 'hw-port',
-            'security_groups': [cls.sg_hw_port['id']],
-            'binding:vnic_type': 'baremetal',
-            'binding:host_id': 'dummy',
-            'binding:profile': {
-                "local_link_information": [
-                    {"port_id": cls.gw_port1.name,
-                     "switch_info": cls.gateway.system_id}]
-            }}
-        cls.hw_port_l3 = cls.os_topology.create_port(cls.networkl3,
-                                                     **hw_port_args)
-
-        # Normal ports l2
-        cls.normal_portl2 = cls.os_topology.create_port(
-            cls.networkl2, security_groups=[cls.sg['id']],
-            name='normal_port1')
-        cls.normal_port2l2 = cls.os_topology.create_port(
-            cls.networkl2, security_groups=[cls.sg['id']],
-            name='normal_port2')
-        cls.normal_port_no_securityl2 = cls.os_topology.create_port(
-            cls.networkl2, port_security_enabled=False,
-            name='normal_port_no_security')
-        cls.normal_port_no_securityl2_2 = cls.os_topology.create_port(
-            cls.networkl2, port_security_enabled=False,
-            name='normal_port_no_security')
-
-        hw_port_args = {
-            'name': 'hw-port',
-            'security_groups': [cls.sg_hw_port['id']],
-            'binding:vnic_type': 'baremetal',
-            'binding:host_id': 'dummy',
-            'binding:profile': {
-                "local_link_information": [
-                    {"port_id": cls.gw_port2.name,
-                     "switch_info": cls.gateway.system_id}]
-            }}
-        cls.hw_port_l2 = cls.os_topology.create_port(cls.networkl2,
-                                                     **hw_port_args)
-
-        cls.pg_for_less_active = True
-        cls.hardware_port = True
+        cls.topology = Topology1()
 
     @classmethod
     def tearDownClass(cls):
@@ -186,36 +197,31 @@ class SgAuditTest(TestBase):
 
         super(SgAuditTest, cls).tearDownClass()
 
-        cls.os_topology.teardown()
-
-        USER.report('=== Deleting VSD gateway resources ===')
-        cls.gw_port1.delete()
-        cls.gw_port2.delete()
-        cls.gateway.delete()
+        cls.topology.teardown()
 
     def get_default_expected_in_sync_counter(self):
         return Counter({
             'ingress_acl_entry_templates (PG_FOR_LESS)':
-                2 * self.os_topology.counter['domains']
-                if self.pg_for_less_active else 0,
+                2 * self.topology.counter['domains']
+                if self.topology.pg_for_less_active else 0,
             'egress_acl_entry_templates (PG_FOR_LESS)':
-                2 * self.os_topology.counter['domains']
-                if self.pg_for_less_active else 0,
+                2 * self.topology.counter['domains']
+                if self.topology.pg_for_less_active else 0,
             'egress_acl_entry_templates':
-                (self.os_topology.counter['domains'] *
-                 self.os_topology.counter['sg_rules_ingress']),
+                (self.topology.counter['domains'] *
+                 self.topology.counter['sg_rules_ingress']),
             'ingress_acl_entry_templates':
-                (self.os_topology.counter['domains'] *
-                 self.os_topology.counter['sg_rules_egress']),
+                (self.topology.counter['domains'] *
+                 self.topology.counter['sg_rules_egress']),
             'egress_acl_entry_templates (hardware)':
-                self.os_topology.counter['domains']
-                if self.hardware_port else 0,
+                self.topology.counter['domains']
+                if self.topology.hardware_port else 0,
             'policygroups':
-                (self.os_topology.counter['domains'] *
-                 self.os_topology.counter['sgs']),
-            'vports': self.os_topology.counter['ports_sg'],
+                (self.topology.counter['domains'] *
+                 self.topology.counter['sgs']),
+            'vports': self.topology.counter['ports_sg'],
             'vports (PG_FOR_LESS)':
-                self.os_topology.counter['ports_no_security'],
+                self.topology.counter['ports_no_security'],
         })
 
     @header()
@@ -224,7 +230,7 @@ class SgAuditTest(TestBase):
         audit_report, observed_in_sync = self.system_under_test.audit_sg()
 
         expected_in_sync = self.get_default_expected_in_sync_counter()
-        self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+        self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
         # expecting zero discrepancies
         self.assert_audit_report_length(0, audit_report)
@@ -244,18 +250,18 @@ class SgAuditTest(TestBase):
         # this is the default block-all rule for hardware PG
         expected_in_sync = Counter({
             'egress_acl_entry_templates (hardware)':
-                self.os_topology.counter['domains']
-                if self.hardware_port else 0,
+                self.topology.counter['domains']
+                if self.topology.hardware_port else 0,
         })
         self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
 
         # check that we have the correct nr of discrepancies
         expected_discrepancies = Counter({
             'ports_missing_pg_for_less':
-                self.os_topology.counter['ports_no_security'],
+                self.topology.counter['ports_no_security'],
             'pgs_missing':
-                (self.os_topology.counter['domains'] *
-                 self.os_topology.counter['sgs'])
+                (self.topology.counter['domains'] *
+                 self.topology.counter['sgs'])
         })
         self.assert_audit_report_length(sum(expected_discrepancies.values()),
                                         audit_report)
@@ -287,13 +293,13 @@ class SgAuditTest(TestBase):
     @header()
     def test_missing_security_groups_for_ports(self, *_):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = (self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security'])
+        expected_in_sync = (self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'])
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
-        expected_discrepancies = (self.os_topology.counter['sgs'] *
-                                  self.os_topology.counter['domains'])
+        expected_discrepancies = (self.topology.counter['sgs'] *
+                                  self.topology.counter['domains'])
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
             self.assert_equal('ORPHAN_VSD_ENTITY',
@@ -314,16 +320,16 @@ class SgAuditTest(TestBase):
     def test_missing_port(self, *_):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         # Expected in sync: -2 because of the normal_port1 being excluded
-        expected_in_sync = (self.os_topology.counter['ports_sg'] +
-                            self.os_topology.counter['domains'] *
-                            (self.os_topology.counter['sgs'] +
-                             self.os_topology.counter['sg_rules_ingress'] +
-                             self.os_topology.counter['sg_rules_egress']) +
-                            self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security']) - 2
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sgs'] +
+                             self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress']) +
+                            self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security']) - 2
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 2 ports missing
@@ -346,31 +352,31 @@ class SgAuditTest(TestBase):
     @header()
     def test_missing_vport(self, *_):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = (self.os_topology.counter['ports_sg'] +
-                            self.os_topology.counter['domains'] *
-                            (self.os_topology.counter['sgs'] +
-                             self.os_topology.counter['sg_rules_ingress'] +
-                             self.os_topology.counter['sg_rules_egress']) +
-                            self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security'] -
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sgs'] +
+                             self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress']) +
+                            self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'] -
                             # 1 less per SG
-                            (self.os_topology.counter['sgs'] -
-                             self.os_topology.counter['remote_sgs']) *
-                            self.os_topology.counter['domains'] -
+                            (self.topology.counter['sgs'] -
+                             self.topology.counter['remote_sgs']) *
+                            self.topology.counter['domains'] -
                             # Additionally 1 less for PG_FOR_LESS
-                            self.pg_for_less_active *
-                            self.os_topology.counter['domains'])
+                            self.topology.pg_for_less_active *
+                            self.topology.counter['domains'])
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         # Expected discrepancies: 1 missing PG
-        expected_discrepancies = ((self.os_topology.counter['sgs'] -
-                                   self.os_topology.counter['remote_sgs']) *
-                                  self.os_topology.counter['domains'] +
-                                  self.pg_for_less_active *
-                                  self.os_topology.counter['domains'])
+        expected_discrepancies = ((self.topology.counter['sgs'] -
+                                   self.topology.counter['remote_sgs']) *
+                                  self.topology.counter['domains'] +
+                                  self.topology.pg_for_less_active *
+                                  self.topology.counter['domains'])
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
             self.assert_equal('ORPHAN_NEUTRON_ENTITY',
@@ -380,7 +386,8 @@ class SgAuditTest(TestBase):
         # only keep rules with remote_group being the remote_sg
         sg = self.client.show_security_group(sg_id)['security_group']
         sg['security_group_rules'] = filter(
-            lambda r: r['remote_group_id'] == SgAuditTest.remote_sg['id'],
+            lambda r: (r['remote_group_id'] ==
+                       SgAuditTest.topology.remote_sg['id']),
             sg['security_group_rules'])
         return sg
 
@@ -389,28 +396,28 @@ class SgAuditTest(TestBase):
     @header()
     def test_missing_rules_for_security_group(self, *_):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = (self.os_topology.counter['ports_sg'] +
-                            self.os_topology.counter['domains'] *
-                            (self.os_topology.counter['sgs'] +
-                             self.os_topology.counter['sg_rules_ingress'] +
-                             self.os_topology.counter['sg_rules_egress']) +
-                            self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security'] -
-                            self.os_topology.counter['domains'] *
-                            (self.os_topology.counter['sg_rules_ingress'] +
-                             self.os_topology.counter['sg_rules_egress'] -
-                             self.os_topology.counter['sg_rules_remote']))
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sgs'] +
+                             self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress']) +
+                            self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'] -
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress'] -
+                             self.topology.counter['sg_rules_remote']))
 
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         expected_discrepancies = \
-            (self.os_topology.counter['domains'] *
-             (self.os_topology.counter['sg_rules_ingress'] +
-              self.os_topology.counter['sg_rules_egress'] -
-              self.os_topology.counter['sg_rules_remote']))
+            (self.topology.counter['domains'] *
+             (self.topology.counter['sg_rules_ingress'] +
+              self.topology.counter['sg_rules_egress'] -
+              self.topology.counter['sg_rules_remote']))
 
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
@@ -426,19 +433,19 @@ class SgAuditTest(TestBase):
     @header()
     def test_missing_acl_entries(self, *_):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = (self.os_topology.counter['ports_sg'] +
-                            self.os_topology.counter['domains'] *
-                            self.os_topology.counter['sgs'] +
-                            self.os_topology.counter['ports_no_security'])
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            self.topology.counter['sgs'] +
+                            self.topology.counter['ports_no_security'])
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         expected_discrepancies = \
-            (self.os_topology.counter['domains'] *
-             (self.os_topology.counter['sg_rules_ingress'] +
-              self.os_topology.counter['sg_rules_egress']) +
-             self.pg_for_less_active * 4 *
-             self.os_topology.counter['domains'] +
-             self.hardware_port * self.os_topology.counter['domains'])
+            (self.topology.counter['domains'] *
+             (self.topology.counter['sg_rules_ingress'] +
+              self.topology.counter['sg_rules_egress']) +
+             self.topology.pg_for_less_active * 4 *
+             self.topology.counter['domains'] +
+             self.topology.hardware_port * self.topology.counter['domains'])
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         mismatch = 0
         orphan = 0
@@ -450,15 +457,15 @@ class SgAuditTest(TestBase):
             else:
                 self.fail("Discrepancy type {} unexpected.".format(
                     discrepancy['discrepancy_type']))
-        expected_mismatches = (self.pg_for_less_active * 4 *
-                               self.os_topology.counter['domains'])
+        expected_mismatches = (self.topology.pg_for_less_active * 4 *
+                               self.topology.counter['domains'])
         self.assert_equal(expected_mismatches, mismatch,
                           'Exactly {} entity mismatches expected, found {}')
-        expected_orphans = (self.os_topology.counter['domains'] *
-                            (self.os_topology.counter['sg_rules_ingress'] +
-                             self.os_topology.counter['sg_rules_egress']) +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'])
+        expected_orphans = (self.topology.counter['domains'] *
+                            (self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress']) +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'])
         self.assert_equal(expected_orphans, orphan,
                           'Exactly {} neutron orphans expected, found {}')
 
@@ -474,15 +481,15 @@ class SgAuditTest(TestBase):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
 
         # Expected: pg for less + port with no port security
-        expected_in_sync = (self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security'])
+        expected_in_sync = (self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'])
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
-        expected_discrepancies = (self.os_topology.counter['sgs'] *
-                                  self.os_topology.counter['domains'])
+        expected_discrepancies = (self.topology.counter['sgs'] *
+                                  self.topology.counter['domains'])
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
             self.assert_equal('ENTITY_MISMATCH',
@@ -504,20 +511,20 @@ class SgAuditTest(TestBase):
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         INFO.pprint(audit_report)
 
-        expected_in_sync = (self.os_topology.counter['ports_sg'] +
-                            self.os_topology.counter['domains'] *
-                            self.os_topology.counter['sgs'] +
-                            self.pg_for_less_active * 4 *
-                            self.os_topology.counter['domains'] +
-                            self.hardware_port *
-                            self.os_topology.counter['domains'] +
-                            self.os_topology.counter['ports_no_security'])
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            self.topology.counter['sgs'] +
+                            self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'])
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 
         expected_discrepancies = \
-            (self.os_topology.counter['domains'] *
-             (self.os_topology.counter['sg_rules_ingress'] +
-              self.os_topology.counter['sg_rules_egress']))
+            (self.topology.counter['domains'] *
+             (self.topology.counter['sg_rules_ingress'] +
+              self.topology.counter['sg_rules_egress']))
         self.assert_audit_report_length(expected_discrepancies, audit_report)
         for discrepancy in audit_report:
             self.assert_equal('ENTITY_MISMATCH',
@@ -529,10 +536,10 @@ class SgAuditTest(TestBase):
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [pg.id for domain in self.vsd.get_domains()
-                           for pg in self.vsd.get_policy_groups(
-                           domain, vspk_filter="name BEGINSWITH "
-                                               "'PG_FOR_LESS'")]
+        pg_for_less_ids = [
+            pg.id for domain in self.topology.vsd.get_domains()
+            for pg in self.topology.vsd.get_policy_groups(
+                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
 
         def mock_get_ingress_acl_entries(*args, **kwargs):
             original_entries = list(original_fetcher(*args, **kwargs))
@@ -549,8 +556,8 @@ class SgAuditTest(TestBase):
 
             # discrepancy validation
             # there are 2 orphans per domain, an IPv4 and IPv6 ingress rule
-            expected_discrepancies = self.os_topology.counter['domains'] * 2 \
-                if self.pg_for_less_active else 0
+            expected_discrepancies = self.topology.counter['domains'] * 2 \
+                if self.topology.pg_for_less_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -559,17 +566,17 @@ class SgAuditTest(TestBase):
 
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
     @header()
     def test_pg_for_less_invalid_rules_action(self):
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [pg.id for domain in self.vsd.get_domains()
-                           for pg in self.vsd.get_policy_groups(
-                           domain, vspk_filter="name BEGINSWITH "
-                                               "'PG_FOR_LESS'")]
+        pg_for_less_ids = [
+            pg.id for domain in self.topology.vsd.get_domains()
+            for pg in self.topology.vsd.get_policy_groups(
+                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
 
         def mock_get_ingress_acl_entries_bad_action(*args, **kwargs):
             for entry in original_fetcher(*args, **kwargs):
@@ -586,8 +593,8 @@ class SgAuditTest(TestBase):
 
             # discrepancy validation
             # there are 2 mismatches per domain, an IPv4 and IPv6 ingress rule
-            expected_discrepancies = self.os_topology.counter['domains'] * 2 \
-                if self.pg_for_less_active else 0
+            expected_discrepancies = self.topology.counter['domains'] * 2 \
+                if self.topology.pg_for_less_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -597,23 +604,23 @@ class SgAuditTest(TestBase):
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
             expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
     @header()
     def test_pg_for_less_invalid_rules_ethertype(self):
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [pg.id for domain in self.vsd.get_domains()
-                           for pg in self.vsd.get_policy_groups(
-                           domain, vspk_filter="name BEGINSWITH "
-                                               "'PG_FOR_LESS'")]
+        pg_for_less_ids = [
+            pg.id for domain in self.topology.vsd.get_domains()
+            for pg in self.topology.vsd.get_policy_groups(
+                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
 
         def mock_get_ingress_acl_entries_bad_ether_type(*args, **kwargs):
-                for entry in original_fetcher(*args, **kwargs):
-                    if entry.location_id in pg_for_less_ids:
-                        entry.ether_type = ''  # Used to represent IPv4/IPv6
-                    yield entry
+            for entry in original_fetcher(*args, **kwargs):
+                if entry.location_id in pg_for_less_ids:
+                    entry.ether_type = ''  # Used to represent IPv4/IPv6
+                yield entry
 
         with mock.patch.object(
                 VsdClient, 'get_ingress_acl_entries',
@@ -625,8 +632,8 @@ class SgAuditTest(TestBase):
             # discrepancy validation
             # there are 4 mismatches per domain, invalid rule for IPv4 and IPv6
             # and detection of missing entry for IPv4 and IPv6
-            expected_discrepancies = self.os_topology.counter['domains'] * 4 \
-                if self.pg_for_less_active else 0
+            expected_discrepancies = self.topology.counter['domains'] * 4 \
+                if self.topology.pg_for_less_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -636,7 +643,7 @@ class SgAuditTest(TestBase):
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
             expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
     @header()
     def test_hardware_block_all_acl_missing(self):
@@ -656,8 +663,8 @@ class SgAuditTest(TestBase):
             # discrepancy validation
             # There is one orphans per domain since each domain has one
             # block-all acl for hardware vports
-            expected_discrepancies = (self.os_topology.counter['domains']
-                                      if self.hardware_port else 0)
+            expected_discrepancies = (self.topology.counter['domains']
+                                      if self.topology.hardware_port else 0)
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -669,7 +676,7 @@ class SgAuditTest(TestBase):
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
             expected_in_sync['egress_acl_entry_templates (hardware)'] = 0
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
     @header()
     def test_hardware_block_all_acl_too_many_rules(self):
@@ -691,8 +698,8 @@ class SgAuditTest(TestBase):
             # discrepancy validation
             # Normally we have one entry per domain, since we doubled the
             # entries there is now one excess entry per domain
-            expected_discrepancies = (self.os_topology.counter['domains']
-                                      if self.hardware_port else 0)
+            expected_discrepancies = (self.topology.counter['domains']
+                                      if self.topology.hardware_port else 0)
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -704,7 +711,7 @@ class SgAuditTest(TestBase):
 
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
     @header()
     def test_hardware_block_all_acl_invalid_rules(self):
@@ -727,8 +734,8 @@ class SgAuditTest(TestBase):
             # discrepancy validation
             # There is one mismatch per domain since each domain has one
             # block-all acl with one rule for hardware vports
-            expected_discrepancies = (self.os_topology.counter['domains']
-                                      if self.hardware_port else 0)
+            expected_discrepancies = (self.topology.counter['domains']
+                                      if self.topology.hardware_port else 0)
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             for entry in audit_report:
@@ -740,4 +747,45 @@ class SgAuditTest(TestBase):
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
             expected_in_sync['egress_acl_entry_templates (hardware)'] = 0
-            self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)
+
+    @header()
+    def test_port_security_mismatch(self):
+        original_getter = NeutronClient.get_ports
+
+        def mock_get_ports_missing_port_security(*args, **kwargs):
+            ports = original_getter(*args, **kwargs)
+            port = next((port for port in ports
+                         if port.get('id') ==
+                         self.topology.normal_portl3['id']), None)
+            if port:
+                self.assertIs(True, port.get('port_security_enabled'))
+                port['port_security_enabled'] = False
+                port['security_groups'] = []
+            return ports
+
+        with mock.patch.object(
+                NeutronClient, 'get_ports',
+                new=mock_get_ports_missing_port_security):
+            # audit
+            audit_report, observed_in_sync = self.system_under_test.audit_sg()
+            INFO.pprint(audit_report)
+
+            # discrepancy validation
+            # The neutron port is not linked anymore with the vPort,
+            # so we have one neutron orphan and one VSD orphan
+            self.assert_audit_report_length(2, audit_report)
+            self.assert_equal(
+                expected={'ORPHAN_VSD_ENTITY', 'ORPHAN_NEUTRON_ENTITY'},
+                observed={discrepancy['discrepancy_type']
+                          for discrepancy in audit_report})
+            neutron_discrepancy = next(
+                discrepancy for discrepancy in audit_report
+                if discrepancy['discrepancy_type'] == 'ORPHAN_NEUTRON_ENTITY')
+            self.assert_equal(expected=self.topology.normal_portl3['id'],
+                              observed=neutron_discrepancy['neutron_entity'])
+
+            # in sync validation
+            expected_in_sync = self.get_default_expected_in_sync_counter()
+            expected_in_sync['vports'] -= 1
+            self.assert_counter_equal(expected_in_sync, observed_in_sync)

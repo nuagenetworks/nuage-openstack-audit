@@ -41,7 +41,7 @@ class NeutronTopology(object):
         #  - Number of security groups used as a remote group in a rule
         #     'remote_sgs'
         #
-        #  - Number of rules in security groups uses as a remote groups
+        #  - Number of rules in security groups that are used as a remote group
         #     'sg_rules_remote'
         #
         #  - Number of ports with / without security group

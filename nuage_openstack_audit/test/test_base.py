@@ -62,3 +62,10 @@ class TestBase(testtools.TestCase):
                           sum(six.itervalues(observed)) if isinstance(
                               observed, Counter) else observed,
                           'Expected {} entities in sync, got {}')
+
+    def assert_counter_equal(self, expected, observed):
+        # remove zero's
+        expected += Counter()
+        observed += Counter()
+
+        self.assert_equal(expected, observed)

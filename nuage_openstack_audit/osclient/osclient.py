@@ -142,6 +142,12 @@ class NeutronClient(object):
         return self.client.list_ports(**kwargs)['ports']
 
     @TimeIt.timeit
+    def get_ports_by_subnet_ids(self, subnet_ids):
+        filters = {'fixed_ips':
+                   ['subnet_id={}'.format(s_id) for s_id in subnet_ids]}
+        return self.get_ports(filters)
+
+    @TimeIt.timeit
     def get_security_group(self, sg_id):
         try:
             return self.client.show_security_group(sg_id)['security_group']

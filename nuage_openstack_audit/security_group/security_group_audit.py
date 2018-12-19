@@ -46,6 +46,21 @@ AUTO_CREATE_PORT_OWNERS = ['network:router_interface',
 PG_FOR_LESS_SECURITY = 'PG_FOR_LESS_SECURITY'
 
 
+class SGPortsTuple(object):
+    """ A custom named tuple initialized with empty list of ports"""
+    def __init__(self, security_group=None, ports=None):
+        self.security_group = security_group
+        self.ports = ports if ports else []
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self.security_group
+        elif index == 1:
+            return self.ports
+        else:
+            raise IndexError
+
+
 class SecurityGroupAudit(Audit):
 
     def __init__(self, neutron, vsd, cms_id):
@@ -225,14 +240,14 @@ class SecurityGroupAudit(Audit):
                 if sg['type'] == ACL_TEMPLATE_HARDWARE else sg['id'])
 
     def audit_domain(self, domain, os_id, subnet_ids, is_l2):
-        sg_to_ports = self._get_sg_to_ports_mapping(subnet_ids)
+        sg_to_ports = self._get_sg_id_to_sg_and_ports_mapping(subnet_ids)
         # Calculate PG -> vports dict
         # vports is a fetcher on policygroup
         # filter out the defaultPG_ for SRIOV
+        _filter = "not(name BEGINSWITH 'defaultPG-' or name BEGINSWITH '{}')" \
+                  " and {}".format(PG_FOR_LESS_SECURITY, self.vspk_filter)
         policygroups = list(self.vsd.get_policy_groups(
-            domain, vspk_filter="not(name BEGINSWITH 'defaultPG-' or name "
-                                "BEGINSWITH 'PG_FOR_LESS')" + " and " +
-                                self.vspk_filter))
+            domain, vspk_filter=_filter))
         policygroup_id_by_os_id = {self.strip_cms_id(pg.external_id): pg.id
                                    for pg in policygroups}
 
@@ -273,9 +288,9 @@ class SecurityGroupAudit(Audit):
                                                        template_type)) or
                         (None, None))
             if ports:
-                vspk_filter = ("name BEGINSWITH 'PG_FOR_LESS' and "
-                               "type IS '{}'".format(template_type) +
-                               " and " + self.vspk_filter)
+                vspk_filter = ("name BEGINSWITH '{}' and type IS '{}' and {}"
+                               .format(PG_FOR_LESS_SECURITY, template_type,
+                                       self.vspk_filter))
                 policygroups = list(self.vsd.get_policy_groups(domain,
                                                                vspk_filter))
                 audit_report, cnt_in_sync = PGForLessAudit(
@@ -313,82 +328,93 @@ class SecurityGroupAudit(Audit):
                           for subnet in network['subnets']}
         all_subnets = {subnet['id']
                        for subnet in self.neutron.get_subnets()}
-        router_to_subnet[None] = (all_subnets -
-                                  set.union(*router_to_subnet.itervalues()) -
-                                  public_subnets)
+        router_to_subnet[None] = (
+            all_subnets -
+            set.union(*six.itervalues(router_to_subnet)) -
+            public_subnets)
 
         return router_to_subnet
 
-    def _get_sg_to_ports_mapping(self, subnet_ids):
-        subnet_filter = ['subnet_id={}'.format(my_id) for my_id in subnet_ids]
-        ports = self.neutron.get_ports({'fixed_ips': subnet_filter})
-        # Calculate SG -> Ports dict
-        sg_id_to_ports = defaultdict(list)
-        sg_to_ports = {}
-        for port in ports:
-            if not self.should_have_vport(port):
-                continue
+    def _get_sg_id_to_sg_and_ports_mapping(self, subnet_ids):
+        result = defaultdict(SGPortsTuple)
+
+        # map the security group ids to ports
+        ports_that_should_have_vport = filter(
+            self.should_have_vport,
+            self.neutron.get_ports_by_subnet_ids(subnet_ids))
+        for port in ports_that_should_have_vport:
             # Handle normal security groups
-            for sg in port['security_groups']:
-                sg_id_to_ports[sg].append(port)
+            for sg_id in port['security_groups']:
+                result[sg_id].ports.append(port)
             # Handle the case where PG_FOR_LESS_SECURITY is used
             if not port['port_security_enabled']:
-                sg_type = (ACL_TEMPLATE_HARDWARE if
-                           (port['binding:vnic_type'] == 'baremetal' and
-                            port['binding:host_id'] and
-                            port['binding:profile']) else
-                           ACL_TEMPLATE_SOFTWARE)
+                sg_type = (ACL_TEMPLATE_HARDWARE
+                           if self.is_bound_baremetal_port(port)
+                           else ACL_TEMPLATE_SOFTWARE)
                 sg_id = PG_FOR_LESS_SECURITY + '_' + sg_type
                 # Here we directly create the sg_group dictionary as it is
                 # artificial anyway
-                if sg_to_ports.get(sg_id):
-                    _, ports = sg_to_ports[sg_id]
-                    ports.append(port)
-                else:
-                    sg = {'id': sg_id, 'type': sg_type}
-                    sg_to_ports[sg_id] = (sg, [port])
-        for sg_id, ports in six.iteritems(sg_id_to_ports):
-            sg = self.neutron.get_security_group(sg_id)
-            sg_type = (ACL_TEMPLATE_HARDWARE if any(map(
-                lambda x: x['binding:vnic_type'] == 'baremetal' and
-                x['binding:host_id'] and x['binding:profile'], ports)) else
-                ACL_TEMPLATE_SOFTWARE)
-            sg['type'] = sg_type
-            sg_to_ports[sg_id] = (sg, ports)
+                if result[sg_id].security_group is None:
+                    result[sg_id].security_group = {'id': sg_id,
+                                                    'type': sg_type}
+                result[sg_id].ports.append(port)
 
-        # add the security groups not attached to a port but used as remote sg
+        # fetch and add the security group objects
+        for sg_id, sg_ports_tuple in six.iteritems(result):
+            if sg_id.startswith(PG_FOR_LESS_SECURITY):
+                continue
+            sg = self.neutron.get_security_group(sg_id)
+            sg['type'] = (ACL_TEMPLATE_HARDWARE
+                          if any(self.is_bound_baremetal_port(port)
+                                 for port in sg_ports_tuple.ports)
+                          else ACL_TEMPLATE_SOFTWARE)
+            sg_ports_tuple.security_group = sg
+
+        # add the security groups used as remote sg but not attached to a port
         missing_sg_ids = {sg_rule['remote_group_id']
-                          for (sg, _) in six.itervalues(sg_to_ports)
+                          for (sg, _) in six.itervalues(result)
                           if 'security_group_rules' in sg
                           for sg_rule in sg['security_group_rules']
                           if sg_rule['remote_group_id'] is not None and
-                          sg_rule['remote_group_id'] not in
-                          sg_id_to_ports.keys()}
+                          sg_rule['remote_group_id'] not in result}
         for remote_group_id in missing_sg_ids:
             remote_sg = self.neutron.get_security_group(remote_group_id)
             if not remote_sg:
-                continue  # Openstack invalid
+                continue  # invalid
             remote_sg['type'] = ACL_TEMPLATE_SOFTWARE
-            sg_to_ports[remote_group_id] = (remote_sg, [])
+            result[remote_group_id].security_group = remote_sg
 
-        return sg_to_ports
+        return result
 
     @staticmethod
-    def should_have_vport(port):
-        if port['binding:vnic_type'] == 'normal':
+    def is_normal_port(port):
+        return port['binding:vnic_type'] == 'normal'
+
+    @staticmethod
+    def is_bound_baremetal_port(port):
+        return (port['binding:vnic_type'] == 'baremetal' and
+                port['binding:host_id'] and port['binding:profile'])
+
+    @staticmethod
+    def is_sriov_port(port):
+        return port['binding:vnic_type'] in ['direct', 'direct-physical']
+
+    @classmethod
+    def should_have_vport(cls, port):
+        if cls.is_normal_port(port):
             device_owner = port['device_owner']
             return not (device_owner in AUTO_CREATE_PORT_OWNERS or
                         device_owner.startswith(tuple(
                             Utils.get_env_var('OS_DEVICE_OWNER_PREFIX', ''))))
-        elif port['binding:vnic_type'] in ['direct', 'direct-physical']:
+        elif cls.is_sriov_port(port):
             # TODO Add support for SRIOV ports
             WARN.h3("Port {} is a SRIOV port. SRIOV audit is not supported. "
                     "Orphan policygroups or orphan policygroup-vport "
                     "associations may be wrongly reported!")
-        elif port['binding:vnic_type'] == 'baremetal':
-            return port['binding:host_id'] and port['binding:profile']
+        elif cls.is_bound_baremetal_port(port):
+            return True
         else:
-            return False  # Default: no vport on VSD
+            return False
 
     def audit(self):
         self.audit_report = []
