@@ -52,6 +52,9 @@ class NeutronTopology(object):
     def authenticate(self, credentials):
         self.neutron.authenticate(credentials)
 
+    def is_dhcp_agent_enabled(self):
+        return self.neutron.is_dhcp_agent_enabled()
+
     def teardown(self):
         """Cleanup of created topology"""
         USER.report('=== Teardown of OpenStack test topology ===')

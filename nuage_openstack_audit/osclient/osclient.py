@@ -85,6 +85,7 @@ class KeystoneClient(object):
 class NeutronClient(object):
     def __init__(self):
         self.client = None
+        self.dhcp_agent_enabled = None
 
     def authenticate(self, credentials):
         from neutronclient.neutron import client as neutron_client
@@ -101,7 +102,20 @@ class NeutronClient(object):
                 password=credentials.password,
                 tenant_name=credentials.project_name,
                 auth_url=credentials.auth_url))
+        self.dhcp_agent_enabled = None
         return self
+
+    @TimeIt.timeit
+    def is_dhcp_agent_enabled(self):
+        if self.dhcp_agent_enabled is None:
+            agents = self.client.list_agents().get('agents')
+            if agents:
+                self.dhcp_agent_enabled = any(
+                    agent for agent in agents if agent['alive'] and
+                    agent['binary'] == 'neutron-dhcp-agent')
+            else:
+                self.dhcp_agent_enabled = False
+        return self.dhcp_agent_enabled
 
     @TimeIt.timeit
     def get_firewalls(self):

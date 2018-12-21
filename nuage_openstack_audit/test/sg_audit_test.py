@@ -226,6 +226,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_no_discrepancies(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
 
         audit_report, observed_in_sync = self.system_under_test.audit_sg()
 
@@ -244,6 +247,9 @@ class SgAuditTest(TestBase):
         Only hardware block-all rule and PG_for_less are still audited,
         the latter will show discrepancies because of missing policygroups
         """
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, observed_in_sync = self.system_under_test.audit_sg()
 
         # check that we have the correct nr of in sync vsd entities
@@ -253,7 +259,7 @@ class SgAuditTest(TestBase):
                 self.topology.counter['domains']
                 if self.topology.hardware_port else 0,
         })
-        self.assertEqual(Counter(), expected_in_sync - observed_in_sync)
+        self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
         # check that we have the correct nr of discrepancies
         expected_discrepancies = Counter({
@@ -292,6 +298,9 @@ class SgAuditTest(TestBase):
                        _mock_get_ports_missing_sgs)
     @header()
     def test_missing_security_groups_for_ports(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         expected_in_sync = (self.topology.pg_for_less_active * 4 *
                             self.topology.counter['domains'] +
@@ -318,6 +327,9 @@ class SgAuditTest(TestBase):
                        _mock_get_ports_missing_port)
     @header()
     def test_missing_port(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         # Expected in sync: -2 because of the normal_port1 being excluded
         expected_in_sync = (self.topology.counter['ports_sg'] +
@@ -351,6 +363,9 @@ class SgAuditTest(TestBase):
                        new=_mock_get_vports_missing_vport)
     @header()
     def test_missing_vport(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         expected_in_sync = (self.topology.counter['ports_sg'] +
                             self.topology.counter['domains'] *
@@ -395,6 +410,9 @@ class SgAuditTest(TestBase):
                        new=_mock_get_security_group_missing_rules)
     @header()
     def test_missing_rules_for_security_group(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         expected_in_sync = (self.topology.counter['ports_sg'] +
                             self.topology.counter['domains'] *
@@ -432,6 +450,9 @@ class SgAuditTest(TestBase):
                        return_value=[])
     @header()
     def test_missing_acl_entries(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         expected_in_sync = (self.topology.counter['ports_sg'] +
                             self.topology.counter['domains'] *
@@ -478,6 +499,9 @@ class SgAuditTest(TestBase):
                        new=mock_get_security_group_changed_sg)
     @header()
     def test_mismatch_security_group(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
 
         # Expected: pg for less + port with no port security
@@ -508,6 +532,9 @@ class SgAuditTest(TestBase):
                        new=mock_get_security_group_changed_sg_rule)
     @header()
     def test_mismatch_sg_rule(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
         INFO.pprint(audit_report)
 
@@ -533,7 +560,9 @@ class SgAuditTest(TestBase):
     @header()
     def test_pg_for_less_too_many_acl_entries(self):
         """Audit with duplicated pg for less entries"""
-
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         original_fetcher = VsdClient.get_ingress_acl_entries
 
         pg_for_less_ids = [
@@ -570,6 +599,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_pg_for_less_invalid_rules_action(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
@@ -608,6 +640,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_pg_for_less_invalid_rules_ethertype(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
@@ -647,6 +682,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_hardware_block_all_acl_missing(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         original_fetcher = VsdClient.get_egress_acl_templates_by_external_id
 
         def mock_fetcher_missing_hardware_acl(*args, **kwargs):
@@ -680,6 +718,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_hardware_block_all_acl_too_many_rules(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         original_fetcher = VsdClient.get_egress_acl_entries_by_acl
 
         def mock_fetcher_double_acl_entries(*args, **kwargs):
@@ -715,6 +756,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_hardware_block_all_acl_invalid_rules(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         original_fetcher = VsdClient.get_egress_acl_entries_by_acl
 
         def mock_fetcher_invalid_acl_entries(*args, **kwargs):
@@ -751,6 +795,9 @@ class SgAuditTest(TestBase):
 
     @header()
     def test_port_security_mismatch(self):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
         original_getter = NeutronClient.get_ports
 
         def mock_get_ports_missing_port_security(*args, **kwargs):
