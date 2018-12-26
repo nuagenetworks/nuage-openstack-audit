@@ -19,6 +19,12 @@ At both sides it requires API access, i.e.
 Keystone/Neutron access is set up in same way as python keystone/neutron
 clients are set up, by defining standard OpenStack OS\_* environment variables.
 
+Next to the standard variables, one can set OS_VERIFY_CA variable to True or
+False for enabling certificate verification in the SSL communication to
+OpenStack. Defaults to True when not set.
+Note this aligns with the OS client --verify setting.
+Only when set to True, standard variable OS_CACERT will be considered by Audit.
+
 VSD API access and audit tool configuration is specified using environment
 variables as specified in the sample file `etc/nuage-openstack-audit.sample.rc`
 

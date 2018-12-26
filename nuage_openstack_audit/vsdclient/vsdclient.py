@@ -20,7 +20,7 @@ from nuage_openstack_audit.vsdclient.resources.security_groups_mixin \
     import SecurityGroupsMixin
 
 
-class VsdCredentials:
+class VsdCredentials(object):
 
     def __init__(self, vsd_server, user, password, enterprise, base_uri):
         self.vsd_server = vsd_server
@@ -29,6 +29,13 @@ class VsdCredentials:
         self.enterprise = enterprise
         self.base_uri = base_uri
         self.api_version = 'v{}'.format(search(r'(\d+_\d+)', base_uri).group())
+
+    def report(self, log):
+        obfuscated_me = vars(self)
+        obfuscated_me['password'] = '***'
+
+        log.report('VsdCredentials')
+        log.pprint(obfuscated_me)
 
 
 class VsdClient(FWaaSMixin, SecurityGroupsMixin):

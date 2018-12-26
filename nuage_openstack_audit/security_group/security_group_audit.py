@@ -403,9 +403,10 @@ class SecurityGroupAudit(Audit):
     def should_have_vport(cls, port):
         if cls.is_normal_port(port):
             device_owner = port['device_owner']
+            device_owner_prefix = Utils.get_env_var('OS_DEVICE_OWNER_PREFIX')
             return not (device_owner in AUTO_CREATE_PORT_OWNERS or
-                        device_owner.startswith(tuple(
-                            Utils.get_env_var('OS_DEVICE_OWNER_PREFIX', ''))))
+                        device_owner_prefix and device_owner.startswith(
+                            device_owner_prefix))
         elif cls.is_sriov_port(port):
             # TODO Add support for SRIOV ports
             WARN.h3("Port {} is a SRIOV port. SRIOV audit is not supported. "

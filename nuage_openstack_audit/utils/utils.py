@@ -27,14 +27,16 @@ class Utils(object):
         reporter.report(traceback.format_exc())
 
     @staticmethod
-    def get_env_var(name, default=None):
+    def get_env_var(name, default=None, required=False):
+        assert default is None or not required  # don't set default and
+        #                                         required at same time
         try:
-            if os.environ[name] or default is None:
+            if os.environ[name] is not None:
                 return os.environ[name]
             else:
                 return default
         except KeyError:
-            if default is not None:
+            if not required:
                 return default
             else:
                 Utils.env_error('Please set %s. Aborting.', name)
