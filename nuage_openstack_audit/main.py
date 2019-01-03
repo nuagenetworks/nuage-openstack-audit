@@ -139,11 +139,20 @@ class Main(object):
         # end of specify certificate verification
 
         user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
+        user_domain_name = Utils.get_env_var('OS_USER_DOMAIN_NAME')
+        if not user_domain_name and not user_domain_id:
+            Utils.env_error('OS_USER_DOMAIN_ID nor OS_USER_DOMAIN_NAME '
+                            'is defined. Please set either of both.')
         project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
+        project_domain_name = Utils.get_env_var('OS_PROJECT_DOMAIN_NAME')
+        if not project_domain_name and not project_domain_id:
+            Utils.env_error('OS_PROJECT_DOMAIN_ID nor OS_PROJECT_DOMAIN_NAME '
+                            'is defined. Please set either of both.')
 
         return OSCredentials(
             auth_url, username, password, project_name, identity_api_version,
-            verify_ca, ca_cert, user_domain_id, project_domain_id)
+            verify_ca, ca_cert, user_domain_id, user_domain_name,
+            project_domain_id, project_domain_name)
 
     @staticmethod
     def get_vsd_credentials():

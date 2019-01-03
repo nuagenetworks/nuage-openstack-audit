@@ -20,7 +20,8 @@ from nuage_openstack_audit.utils.timeit import TimeIt
 class OSCredentials(object):
     def __init__(self, auth_url, username, password, project_name,
                  identity_api_version, verify_ca=True, ca_cert=None,
-                 user_domain_id=None, project_domain_id=None):
+                 user_domain_id=None, user_domain_name=None,
+                 project_domain_id=None, project_domain_name=None):
         self.auth_url = auth_url
         self.username = username
         self.password = password
@@ -30,7 +31,9 @@ class OSCredentials(object):
         self.ca_cert = ca_cert if verify_ca else None
         if identity_api_version == 3:
             self.auth_url = self.assure_endswith(self.auth_url, '/v3')
+            self.user_domain_name = user_domain_name
             self.user_domain_id = user_domain_id
+            self.project_domain_name = project_domain_name
             self.project_domain_id = project_domain_id
         else:
             self.auth_url = self.assure_endswith(self.auth_url, '/v2.0')
@@ -71,8 +74,10 @@ class KeystoneClient(object):
                     username=credentials.username,
                     password=credentials.password,
                     project_name=credentials.project_name,
+                    project_domain_id=credentials.project_domain_id,
+                    project_domain_name=credentials.project_domain_name,
                     user_domain_id=credentials.user_domain_id,
-                    project_domain_id=credentials.project_domain_id)
+                    user_domain_name=credentials.user_domain_name)
 
                 self.session = keystone_session.Session(
                     auth=auth,
