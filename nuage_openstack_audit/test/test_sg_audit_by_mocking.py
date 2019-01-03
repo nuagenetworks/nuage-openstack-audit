@@ -31,7 +31,8 @@ from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
 
 # run me using:
-# python -m testtools.run nuage_openstack_audit/test/sg_audit_test.py
+# python -m testtools.run \
+#   nuage_openstack_audit/test/test_sg_audit_by_mocking.py
 
 
 WARN = Reporter('WARN')
@@ -175,8 +176,8 @@ class Topology1(NeutronTopology):
         self.gateway.delete()
 
 
-class SgAuditTest(TestBase):
-    """General integration test
+class SgAuditMockTest(TestBase):
+    """Integration tests mocking the neutron client / vsd client getters
 
     Auditing a real system with validation of audit report and entities_in_sync
     It requires a full OS-VSD setup
@@ -186,7 +187,7 @@ class SgAuditTest(TestBase):
 
     @classmethod
     def setUpClass(cls):
-        super(SgAuditTest, cls).setUpClass()
+        super(SgAuditMockTest, cls).setUpClass()
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         cls.topology = Topology1()
@@ -195,7 +196,7 @@ class SgAuditTest(TestBase):
     def tearDownClass(cls):
         USER.report('\n===== End of tests (%s) =====', cls.__name__)
 
-        super(SgAuditTest, cls).tearDownClass()
+        super(SgAuditMockTest, cls).tearDownClass()
 
         cls.topology.teardown()
 
@@ -351,13 +352,34 @@ class SgAuditTest(TestBase):
             self.assert_equal('ORPHAN_VSD_ENTITY',
                               discrepancy['discrepancy_type'])
 
+    @staticmethod
+    def _removed_ports():
+        return [
+            SgAuditMockTest.topology.normal_portl2['id'],
+            SgAuditMockTest.topology.normal_portl3['id'],
+            SgAuditMockTest.topology.normal_port_no_securityl2['id'],
+            SgAuditMockTest.topology.normal_port_no_securityl3['id'],
+            SgAuditMockTest.topology.hw_port_l2['id'],
+            SgAuditMockTest.topology.hw_port_l3['id']
+        ]
+
     def _mock_get_vports_missing_vport(self, parent=None, vspk_filter=None):
+        # Note that since we use mocking, self is the NeutronClient
+        removed_ports = SgAuditMockTest._removed_ports()
+        external_id_func = (SgAuditMockTest.topology.vsd.vspk_helper
+                            .get_external_id_filter)
+        external_id_filters = map(external_id_func, removed_ports)
+        filter_str = 'NOT (' + ' OR '.join(external_id_filters) + ')'
+
+        if vspk_filter:
+            filter_str += ' AND ({})'.format(vspk_filter)
+
         vports = VspkHelper.get_all(
             parent=self.vspk_helper.get_default_enterprise()
             if parent is None else parent,
-            filter=vspk_filter,
+            filter=filter_str,
             fetcher_str="vports")
-        return list(vports)[:-1]
+        return list(vports)
 
     @mock.patch.object(VsdClient, 'get_vports',
                        new=_mock_get_vports_missing_vport)
@@ -366,43 +388,32 @@ class SgAuditTest(TestBase):
         if self.topology.is_dhcp_agent_enabled():
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
-        audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = (self.topology.counter['ports_sg'] +
-                            self.topology.counter['domains'] *
-                            (self.topology.counter['sgs'] +
-                             self.topology.counter['sg_rules_ingress'] +
-                             self.topology.counter['sg_rules_egress']) +
-                            self.topology.pg_for_less_active * 4 *
-                            self.topology.counter['domains'] +
-                            self.topology.hardware_port *
-                            self.topology.counter['domains'] +
-                            self.topology.counter['ports_no_security'] -
-                            # 1 less per SG
-                            (self.topology.counter['sgs'] -
-                             self.topology.counter['remote_sgs']) *
-                            self.topology.counter['domains'] -
-                            # Additionally 1 less for PG_FOR_LESS
-                            self.topology.pg_for_less_active *
-                            self.topology.counter['domains'])
-        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+        audit_report, observed_in_sync = self.system_under_test.audit_sg()
 
-        # Expected discrepancies: 1 missing PG
-        expected_discrepancies = ((self.topology.counter['sgs'] -
-                                   self.topology.counter['remote_sgs']) *
-                                  self.topology.counter['domains'] +
-                                  self.topology.pg_for_less_active *
-                                  self.topology.counter['domains'])
-        self.assert_audit_report_length(expected_discrepancies, audit_report)
+        expected_in_sync = self.get_default_expected_in_sync_counter()
+        expected_in_sync['vports'] -= 4
+        expected_in_sync['vports (PG_FOR_LESS)'] -= 2
+        self.assert_counter_equal(expected_in_sync, observed_in_sync)
+
+        removed_ports = SgAuditMockTest._removed_ports()
+
+        self.assert_audit_report_length(len(removed_ports), audit_report)
         for discrepancy in audit_report:
             self.assert_equal('ORPHAN_NEUTRON_ENTITY',
                               discrepancy['discrepancy_type'])
+            self.assert_equal('Security Group port',
+                              discrepancy['entity_type'])
+            self.assertIn(discrepancy['neutron_entity'], removed_ports)
+            self.assertIsNone(discrepancy['vsd_entity'])
+        self.assert_all_different([discrepancy['neutron_entity']
+                                   for discrepancy in audit_report])
 
     def _mock_get_security_group_missing_rules(self, sg_id):
         # only keep rules with remote_group being the remote_sg
         sg = self.client.show_security_group(sg_id)['security_group']
         sg['security_group_rules'] = filter(
             lambda r: (r['remote_group_id'] ==
-                       SgAuditTest.topology.remote_sg['id']),
+                       SgAuditMockTest.topology.remote_sg['id']),
             sg['security_group_rules'])
         return sg
 
@@ -836,3 +847,36 @@ class SgAuditTest(TestBase):
             expected_in_sync = self.get_default_expected_in_sync_counter()
             expected_in_sync['vports'] -= 1
             self.assert_counter_equal(expected_in_sync, observed_in_sync)
+
+    @header()
+    @mock.patch.object(VsdClient, 'get_l2domain',
+                       return_value=None)
+    @mock.patch.object(VsdClient, 'get_l3domain',
+                       return_value=None)
+    def test_missing_domains(self, *_):
+        if self.topology.is_dhcp_agent_enabled():
+            self.skipTest("Running this test with DHCP agent enabled is not "
+                          "supported")
+        # audit
+        audit_report, observed_in_sync = self.system_under_test.audit_sg()
+        INFO.pprint(audit_report)
+
+        # Nothing is in sync, we cut of early in case of missing domain
+        self.assert_counter_equal(Counter(), observed_in_sync)
+
+        # A discrepancy for each domain
+        self.assertEqual(self.topology.counter['domains'], len(audit_report))
+
+        for discrepancy in audit_report:
+            self.assert_equal('ORPHAN_NEUTRON_ENTITY',
+                              discrepancy['discrepancy_type'])
+            self.assertIsNone(discrepancy['vsd_entity'])
+            self.assertIn(discrepancy['neutron_entity'],
+                          [self.topology.router['id'],
+                           self.topology.subnetl2['id']])
+            if discrepancy['neutron_entity'] == self.topology.router['id']:
+                self.assert_equal(discrepancy['discrepancy_details'],
+                                  'router has no l3-domain')
+            else:
+                self.assert_equal(discrepancy['discrepancy_details'],
+                                  'l2-subnet has no l2-domain')

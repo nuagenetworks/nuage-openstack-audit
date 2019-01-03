@@ -127,12 +127,12 @@ class SecurityGroupAudit(Audit):
                                 for rule in neutron_sg['security_group_rules']
                                 if rule['direction'] == 'ingress']
 
-        ingress_acl_entries = self.vsd.get_ingress_acl_entries(
+        ingress_acl_entries = list(self.vsd.get_ingress_acl_entries(
             by_domain=domain, by_policy_group_id=vsd_pg_id,
-            cms_id=self.cms_id)
-        egress_acl_entries = self.vsd.get_egress_acl_entries(
+            cms_id=self.cms_id))
+        egress_acl_entries = list(self.vsd.get_egress_acl_entries(
             by_domain=domain, by_policy_group_id=vsd_pg_id,
-            cms_id=self.cms_id)
+            cms_id=self.cms_id))
 
         matcher = SecurityGroupRuleAclTemplateEntryMatcher(
             is_stateful=neutron_sg['stateful'],
@@ -330,10 +330,10 @@ class SecurityGroupAudit(Audit):
                           for subnet in network['subnets']}
         all_subnets = {subnet['id']
                        for subnet in self.neutron.get_subnets()}
-        router_to_subnet[None] = (
-            all_subnets -
-            set.union(*six.itervalues(router_to_subnet)) -
-            public_subnets)
+        l3_subnets = (set.union(*six.itervalues(router_to_subnet))
+                      if router_to_subnet else set())
+        l2_subnets = all_subnets - l3_subnets - public_subnets
+        router_to_subnet[None] = l2_subnets
 
         return router_to_subnet
 

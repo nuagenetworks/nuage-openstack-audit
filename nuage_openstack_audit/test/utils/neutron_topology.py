@@ -13,6 +13,10 @@
 #    under the License.
 
 from collections import Counter
+import sqlalchemy
+from sqlalchemy.ext.automap import automap_base as sqlalchemy_automap
+from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
+from urlparse import urlparse
 
 import neutronclient.common.exceptions as neutron_exceptions
 from nuage_openstack_audit.osclient.osclient import NeutronClient
@@ -48,9 +52,42 @@ class NeutronTopology(object):
         #     'ports_sg'
         #     'ports_no_security'
         self.counter = Counter()
+        self.neutron_db_classes = None
+        self.neutron_session_class = None
 
-    def authenticate(self, credentials):
+    def authenticate(self, credentials, db_access=False):
         self.neutron.authenticate(credentials)
+
+        # Neutron database
+        if db_access:
+            auth_url = credentials.auth_url
+            devstack_ip_with_port = urlparse(auth_url).netloc
+            devstack_ip = devstack_ip_with_port.split(':')[0]
+            engine_str = ('mysql+pymysql://root:admin@{}/neutron?charset=utf8'
+                          .format(devstack_ip))
+            engine = sqlalchemy.create_engine(engine_str, echo=False,
+                                              encoding='utf-8')
+            automap_base = sqlalchemy_automap()
+            automap_base.prepare(engine, reflect=True)
+            self.neutron_db_classes = automap_base.classes
+            self.neutron_session_class = sqlalchemy_sessionmaker(bind=engine)
+
+    def enable_port_security_in_db(self, port_id):
+        """Enable port_security_enabled by direct access to the neutron db"""
+        self._update_portsecuritybindings_in_db(port_id, 1)
+
+    def disable_port_security_in_db(self, port_id):
+        """Disable port_security_enabled by direct access to the neutron db"""
+        self._update_portsecuritybindings_in_db(port_id, 0)
+
+    def _update_portsecuritybindings_in_db(self, port_id, new_value):
+        assert new_value in [0, 1]
+        assert self.neutron_session_class is not None
+        session = self.neutron_session_class()
+        db_instance = session.query(
+            self.neutron_db_classes.portsecuritybindings).get(port_id)
+        db_instance.port_security_enabled = 0
+        session.commit()
 
     def is_dhcp_agent_enabled(self):
         return self.neutron.is_dhcp_agent_enabled()
@@ -114,7 +151,8 @@ class NeutronTopology(object):
         return self._create_security_group_rule(*args, **kwargs)
 
     def create_port(self, *args, **kwargs):
-        if kwargs.get('port_security_enabled', True):
+        if (kwargs.get('port_security_enabled', True) and
+                kwargs.get('security_groups') != []):
             self.counter += Counter(ports_sg=1)
         else:
             self.counter += Counter(ports_no_security=1)

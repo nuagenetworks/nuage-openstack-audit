@@ -27,3 +27,6 @@ class VSDTestHelper(VsdClient):
     def create_gateway_port(self, gateway, **kwargs):
         new_port = self.vspk_helper.vspk.NUPort(**kwargs)
         return gateway.create_child(new_port)[0]
+
+    def create_egress_acl_entry(self, **kwargs):
+        return self.vspk_helper.vspk.NUEgressACLEntryTemplate(**kwargs)

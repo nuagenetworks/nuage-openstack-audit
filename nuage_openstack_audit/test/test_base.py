@@ -69,3 +69,7 @@ class TestBase(testtools.TestCase):
         observed += Counter()
 
         self.assert_equal(expected, observed)
+
+    @staticmethod
+    def assert_all_different(a_list):
+        assert len(a_list) == len(set(a_list))

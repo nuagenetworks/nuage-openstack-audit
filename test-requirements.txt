@@ -5,5 +5,7 @@
 coverage
 flake8
 hacking>=1.0.0
-testtools
 mock
+pymysql
+sqlalchemy
+testtools

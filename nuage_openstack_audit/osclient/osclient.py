@@ -127,8 +127,8 @@ class NeutronClient(object):
             agents = self.client.list_agents().get('agents')
             if agents:
                 self.dhcp_agent_enabled = any(
-                    agent for agent in agents if agent['alive'] and
-                    agent['binary'] == 'neutron-dhcp-agent')
+                    agent for agent in agents if agent['admin_state_up'] and
+                    agent['alive'] and agent['binary'] == 'neutron-dhcp-agent')
             else:
                 self.dhcp_agent_enabled = False
         return self.dhcp_agent_enabled

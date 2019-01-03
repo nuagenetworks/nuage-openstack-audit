@@ -42,10 +42,11 @@ class PGForLessAudit(Audit):
                     'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
                     'entity_type': 'port',
                     'neutron_entity': port['id'],
-                    'vsd_entity': None,
-                    'discrepancy_details': 'No Policy Group for less security '
-                                           'found while ports with no port '
-                                           'security exist.'})
+                    'vsd_entity': domain.id,
+                    'discrepancy_details': 'A Neutron port with port security '
+                                           'disabled exists but there is no '
+                                           'policy group for less security '
+                                           'in its domain.'})
             return self.audit_report, self.cnt_in_sync
 
         vports = []
