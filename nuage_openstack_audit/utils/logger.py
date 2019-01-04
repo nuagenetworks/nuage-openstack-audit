@@ -123,7 +123,7 @@ class Logger(LoggerBase):
     def debug(self, msg, *args, **kwargs):
         if self.logger.isEnabledFor(logging.DEBUG) and self.extreme_verbose:
             self.stdout(Reporter.DEBUG + msg + Reporter.ENDC, *args, **kwargs)
-        self.logger.info(msg, *args, **no_end(kwargs))
+        self.logger.debug(msg, *args, **no_end(kwargs))
 
     @staticmethod
     def stdout(msg, *args, **kwargs):
