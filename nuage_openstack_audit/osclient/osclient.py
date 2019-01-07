@@ -19,13 +19,15 @@ from nuage_openstack_audit.utils.timeit import TimeIt
 
 class OSCredentials(object):
     def __init__(self, auth_url, username, password, project_name,
-                 identity_api_version,
+                 identity_api_version, verify_ca=True, ca_cert=None,
                  user_domain_id=None, project_domain_id=None):
         self.auth_url = auth_url
         self.username = username
         self.password = password
         self.project_name = project_name
         self.identity_api_version = identity_api_version
+        self.verify_ca = verify_ca
+        self.ca_cert = ca_cert if verify_ca else None
         if identity_api_version == 3:
             self.auth_url = self.assure_endswith(self.auth_url, '/v3')
             self.user_domain_id = user_domain_id
@@ -36,6 +38,13 @@ class OSCredentials(object):
     @staticmethod
     def assure_endswith(url, endswith):
         return url if url.endswith(endswith) else (url + endswith)
+
+    def report(self, log):
+        obfuscated_me = vars(self)
+        obfuscated_me['password'] = '***'
+
+        log.report('OSCredentials')
+        log.pprint(obfuscated_me)
 
 
 class KeystoneClient(object):
@@ -65,7 +74,9 @@ class KeystoneClient(object):
                     user_domain_id=credentials.user_domain_id,
                     project_domain_id=credentials.project_domain_id)
 
-                self.session = keystone_session.Session(auth=auth)
+                self.session = keystone_session.Session(
+                    auth=auth,
+                    verify=credentials.verify_ca, cert=credentials.ca_cert)
                 if init_client:
                     self.client = keystone_client.Client(session=self.session)
             else:

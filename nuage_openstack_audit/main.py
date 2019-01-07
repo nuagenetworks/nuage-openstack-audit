@@ -26,6 +26,7 @@ ERROR = Reporter('ERROR')
 WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
+DEBUG = Reporter('DEBUG')
 
 NUAGE_OPENSTACK_AUDIT_PREFIX = 'nuage_openstack_audit_'
 
@@ -79,13 +80,13 @@ class Main(object):
 
         # initialize and authenticate the clients
         USER.h1('Authenticating with OpenStack')
-        self.neutron = self.get_neutron_client()
-        self.neutron.authenticate(os_credentials)
+        os_credentials.report(DEBUG)
+        self.neutron = self.get_neutron_client(os_credentials)
 
         USER.h1('Authenticating with Nuage VSD')
-        self.vsd = self.get_vsd_client(cms_id)
-        self.vsd.authenticate(vsd_credentials)
+        vsd_credentials.report(DEBUG)
         self.cms_id = cms_id
+        self.vsd = self.get_vsd_client(cms_id, vsd_credentials)
 
     def init_logger(self, initiating_time):
         from nuage_openstack_audit.utils.logger import get_logger
@@ -113,28 +114,36 @@ class Main(object):
 
     @staticmethod
     def get_cms_id():
-        return Utils.get_env_var('OS_CMS_ID')
+        return Utils.get_env_var('OS_CMS_ID', required=True)
 
     @staticmethod
     def get_os_credentials():
         from nuage_openstack_audit.osclient.osclient import OSCredentials
 
-        auth_url = Utils.get_env_var('OS_AUTH_URL')
-        username = Utils.get_env_var('OS_USERNAME')
+        auth_url = Utils.get_env_var('OS_AUTH_URL', required=True)
+        username = Utils.get_env_var('OS_USERNAME', required=True)
         project_name = Utils.get_env_var(
-            'OS_PROJECT_NAME', Utils.get_env_var('OS_TENANT_NAME', ''))
+            'OS_PROJECT_NAME', Utils.get_env_var('OS_TENANT_NAME'))
         if not project_name:
             Utils.env_error('OS_PROJECT_NAME nor OS_TENANT_NAME '
                             'is defined. Please set either of both.')
-        password = Utils.get_env_var('OS_PASSWORD')
+        password = Utils.get_env_var('OS_PASSWORD', required=True)
         identity_api_version = float(  # deal with version '2.0' e.g.
             Utils.get_env_var('OS_IDENTITY_API_VERSION', 3))
-        user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID', '')
-        project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID', '')
+
+        # add support to specify certificate verification
+        # -- below is not a standard OS env setting -> documented in README --
+        verify_ca = Utils.get_env_bool('OS_VERIFY_CA', True)
+        # -- below is standard --
+        ca_cert = Utils.get_env_var('OS_CACERT')
+        # end of specify certificate verification
+
+        user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
+        project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
 
         return OSCredentials(
             auth_url, username, password, project_name, identity_api_version,
-            user_domain_id, project_domain_id)
+            verify_ca, ca_cert, user_domain_id, project_domain_id)
 
     @staticmethod
     def get_vsd_credentials():
@@ -142,11 +151,12 @@ class Main(object):
         user, password = Utils.get_env_var('OS_VSD_SERVER_AUTH',
                                            'csproot:csproot').split(':')
         return VsdCredentials(
-            vsd_server=Utils.get_env_var('OS_VSD_SERVER'),
+            vsd_server=Utils.get_env_var('OS_VSD_SERVER', required=True),
             user=user,
             password=password,
             base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
-            enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION'))
+            enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION',
+                                         required=True))
 
     def audit_fwaas(self):
         from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
@@ -186,14 +196,14 @@ class Main(object):
         return audit_report, nbr_entities_in_sync
 
     @staticmethod
-    def get_neutron_client():
+    def get_neutron_client(credentials):
         from nuage_openstack_audit.osclient.osclient import NeutronClient
-        return NeutronClient()
+        return NeutronClient().authenticate(credentials)
 
     @staticmethod
-    def get_vsd_client(cms_id):
+    def get_vsd_client(cms_id, credentials):
         from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
-        return VsdClient(cms_id)
+        return VsdClient(cms_id).authenticate(credentials)
 
     @staticmethod
     def check_developer_modus():
@@ -215,15 +225,15 @@ class Main(object):
 
     @staticmethod
     def relative_filename(file_name):
-        pwd = Utils.get_env_var('PWD', 'NOTONLINUX?')
-        if file_name.startswith(pwd):
+        pwd = Utils.get_env_var('PWD')
+        if pwd and file_name.startswith(pwd):
             file_name = '.' + file_name[len(pwd):]
         return file_name
 
     @staticmethod
     def prep_report_name(initiating_time):
         report_dir = Utils.get_env_var('OS_AUDIT_REPORT_DIR', '.')
-        fixed_report_file = Utils.get_env_var('OS_AUDIT_REPORT_FILE', '')
+        fixed_report_file = Utils.get_env_var('OS_AUDIT_REPORT_FILE')
         if not fixed_report_file:
             fixed_report_file = NUAGE_OPENSTACK_AUDIT_PREFIX + initiating_time
         return Main.expand_filename(report_dir, fixed_report_file, '.json')
