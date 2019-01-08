@@ -138,16 +138,22 @@ class Main(object):
         ca_cert = Utils.get_env_var('OS_CACERT')
         # end of specify certificate verification
 
-        user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
-        user_domain_name = Utils.get_env_var('OS_USER_DOMAIN_NAME')
-        if not user_domain_name and not user_domain_id:
-            Utils.env_error('OS_USER_DOMAIN_ID nor OS_USER_DOMAIN_NAME '
-                            'is defined. Please set either of both.')
-        project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
-        project_domain_name = Utils.get_env_var('OS_PROJECT_DOMAIN_NAME')
-        if not project_domain_name and not project_domain_id:
-            Utils.env_error('OS_PROJECT_DOMAIN_ID nor OS_PROJECT_DOMAIN_NAME '
-                            'is defined. Please set either of both.')
+        if identity_api_version == 3:
+            user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
+            user_domain_name = Utils.get_env_var('OS_USER_DOMAIN_NAME')
+            if not user_domain_name and not user_domain_id:
+                Utils.env_error('OS_USER_DOMAIN_ID '
+                                'nor OS_USER_DOMAIN_NAME '
+                                'is defined. Please set either of both.')
+            project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
+            project_domain_name = Utils.get_env_var('OS_PROJECT_DOMAIN_NAME')
+            if not project_domain_name and not project_domain_id:
+                Utils.env_error('OS_PROJECT_DOMAIN_ID '
+                                'nor OS_PROJECT_DOMAIN_NAME '
+                                'is defined. Please set either of both.')
+        else:
+            user_domain_id = user_domain_name = None
+            project_domain_id = project_domain_name = None
 
         return OSCredentials(
             auth_url, username, password, project_name, identity_api_version,
