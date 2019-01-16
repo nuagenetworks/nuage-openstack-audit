@@ -110,7 +110,12 @@ class Topology1(NeutronTopology):
             protocol='icmp', security_group_id=self.sg_hw_port['id'],
             ethertype='IPv4', direction='ingress',
             remote_ip_prefix='0.0.0.0/0')
-
+        self.sg_stateless = self.create_security_group_used(
+            name="test-sg-stateless", stateful=False)
+        self.sg_rule_stateless = self.create_security_group_rule_stateless(
+            protocol='icmp', security_group_id=self.sg_stateless['id'],
+            ethertype='IPv4', direction='ingress',
+            remote_ip_prefix='0.0.0.0/0')
         # Ports
         USER.report('=== Creating OpenStack ports ===')
         # l3
@@ -126,6 +131,9 @@ class Topology1(NeutronTopology):
         self.normal_port_no_securityl3_2 = self.create_port(
             self.networkl3, port_security_enabled=False,
             name='normal_port_no_security')
+        self.normal_port_stateless_sgl3 = self.create_port(
+            self.networkl3, security_groups=[self.sg_stateless['id']],
+            name='normal_port_stateless_sg')
         hw_port_args = {
             'name': 'hw-port',
             'security_groups': [self.sg_hw_port['id']],
@@ -151,6 +159,9 @@ class Topology1(NeutronTopology):
         self.normal_port_no_securityl2_2 = self.create_port(
             self.networkl2, port_security_enabled=False,
             name='normal_port_no_security')
+        self.normal_port_stateless_sgl2 = self.create_port(
+            self.networkl2, security_groups=[self.sg_stateless['id']],
+            name='normal_port_stateless_sg')
 
         hw_port_args = {
             'name': 'hw-port',

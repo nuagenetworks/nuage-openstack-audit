@@ -272,9 +272,9 @@ class NeutronTopology(object):
     def _delete_firewall(self, firewall_id):
         self.neutron.client.delete_firewall(firewall_id)
 
-    def _create_security_group(self, name):
+    def _create_security_group(self, **kwargs):
         sg = self.neutron.client.create_security_group(
-            {"security_group": {"name": name}})['security_group']
+            {"security_group": kwargs})['security_group']
         sg_id = sg['id']
         self.teardown_action_stack.append(
             lambda: self._delete_security_group(sg_id))
