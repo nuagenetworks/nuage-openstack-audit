@@ -265,8 +265,10 @@ class BaseTestCase(object):
             some_acl_entry = (self.vsd.vspk_helper.session.user.
                               ingress_acl_entry_templates.get_first(filter=f))
             self.assertIsNotNone(some_acl_entry)
-            self.assertEqual(some_acl_entry.protocol, '6')  # 6 = TCP
+            self.assertEqual(some_acl_entry.protocol, '47')  # 47 = GRE
             some_acl_entry.protocol = '17'  # 17 = UDP
+            some_acl_entry.source_port = 8080  # must be set for UDP
+            some_acl_entry.destination_port = 9090  # must be set for UDP
             some_acl_entry.save()
 
             # Audit again, expecting an ENTITY_MISMATCH
@@ -302,7 +304,7 @@ class SgAuditTestL2(BaseTestCase.SgAuditTestBase):
         # Create a small topology
         self.sg = self.topology.create_security_group_used(name="test-sg")
         self.sg_rule = self.topology.create_security_group_rule_stateful(
-            protocol='tcp', security_group_id=self.sg['id'],
+            protocol='gre', security_group_id=self.sg['id'],
             ethertype='IPv4', direction='egress',
             remote_ip_prefix='0.0.0.0/0')
         self.topology.create_security_group_rule_stateful(
@@ -344,7 +346,7 @@ class SgAuditTestL3(BaseTestCase.SgAuditTestBase):
         # Create a small topology
         self.sg = self.topology.create_security_group_used(name="test-sg")
         self.sg_rule = self.topology.create_security_group_rule_stateful(
-            protocol='tcp', security_group_id=self.sg['id'],
+            protocol='gre', security_group_id=self.sg['id'],
             ethertype='IPv4', direction='egress',
             remote_ip_prefix='0.0.0.0/0')
         self.topology.create_security_group_rule_stateful(
@@ -392,7 +394,7 @@ class SgAuditTestManyToMany(BaseTestCase.SgAuditTestBase):
 
         # Security group rules
         self.sg_rule = self.topology.create_security_group_rule_stateful(
-            protocol='tcp', security_group_id=self.sg['id'],
+            protocol='gre', security_group_id=self.sg['id'],
             ethertype='IPv4', direction='egress',
             remote_ip_prefix='10.0.0.0/24')
         self.topology.create_security_group_rule_stateful(

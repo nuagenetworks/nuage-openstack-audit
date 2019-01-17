@@ -12,4 +12,5 @@ six
 osc_lib
 python-keystoneclient
 python-neutronclient
+neutron-lib
 vspk>=5.3.3

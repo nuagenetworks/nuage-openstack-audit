@@ -18,10 +18,4 @@ OS_IPV4_ETHERTYPE = "IPv4"
 OS_IPV6_ETHERTYPE = "IPv6"
 HARDWARE = "HARDWARE"
 SOFTWARE = "SOFTWARE"
-PROTOCOL_NAME_TO_NUM = {
-    'tcp': 6,
-    'udp': 17,
-    'icmp': 1,
-    'icmpv6': 58
-}
 STATEFUL_ICMP_TYPES = [8, 13, 15, 17]

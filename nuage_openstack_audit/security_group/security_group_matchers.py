@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from neutron_lib import constants as lib_constants
+
 from nuage_openstack_audit.utils.matcher import Matcher
 from nuage_openstack_audit.vsdclient.common import constants
 
@@ -219,5 +221,5 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
                 if vsd_protocol == 'icmp' and neutron_obj['ethertype'] == \
                         constants.OS_IPV6_ETHERTYPE:
                     vsd_protocol = 'icmpv6'
-                vsd_protocol = constants.PROTOCOL_NAME_TO_NUM[vsd_protocol]
+                vsd_protocol = lib_constants.IP_PROTOCOL_MAP[vsd_protocol]
             return vsd_protocol

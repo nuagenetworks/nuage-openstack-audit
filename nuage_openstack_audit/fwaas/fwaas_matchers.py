@@ -13,6 +13,7 @@
 #    under the License.
 
 import netaddr
+from neutron_lib import constants as lib_constants
 
 from nuage_openstack_audit.utils.matcher import Matcher
 from nuage_openstack_audit.vsdclient.common import constants
@@ -80,7 +81,7 @@ class FirewallRuleMatcher(Matcher):
             ],
             'protocol': [
                 ('protocol',
-                 lambda x: constants.PROTOCOL_NAME_TO_NUM.get(x, 'ANY'))
+                 lambda x: lib_constants.IP_PROTOCOL_MAP.get(x, 'ANY'))
             ],
             'destination_port': [
                 ('destination_port', lambda x: x.replace(':', '-')
