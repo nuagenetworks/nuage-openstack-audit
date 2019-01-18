@@ -48,9 +48,10 @@ class NeutronTopology(object):
         #  - Number of rules in security groups that are used as a remote group
         #     'sg_rules_remote'
         #
-        #  - Number of ports with / without security group
+        #  - Number of ports with / without security group / port sec disabled
         #     'ports_sg'
         #     'ports_no_security'
+        #     'ports_security_disabled'
         self.counter = Counter()
         self.neutron_db_classes = None
         self.neutron_session_class = None
@@ -86,7 +87,7 @@ class NeutronTopology(object):
         session = self.neutron_session_class()
         db_instance = session.query(
             self.neutron_db_classes.portsecuritybindings).get(port_id)
-        db_instance.port_security_enabled = 0
+        db_instance.port_security_enabled = new_value
         session.commit()
 
     def is_dhcp_agent_enabled(self):
@@ -155,6 +156,8 @@ class NeutronTopology(object):
                 kwargs.get('security_groups') != []):
             self.counter += Counter(ports_sg=1)
         else:
+            if not kwargs.get('port_security_enabled', True):
+                self.counter += Counter(ports_security_disabled=1)
             self.counter += Counter(ports_no_security=1)
 
         return self._create_port(*args, **kwargs)

@@ -58,6 +58,7 @@ class BaseTestCase(object):
             self.subnet = None
             self.port = None
             self.port_no_sg = None
+            self.port_port_security_disabled = None
 
         @classmethod
         def setUpClass(cls):
@@ -74,7 +75,8 @@ class BaseTestCase(object):
             super(BaseTestCase.SgAuditTestBase, self).tearDown()
             self.topology.teardown()
 
-        def test_port_security_mismatch(self):
+        def test_port_security_mismatch_neutron_disabled(self):
+            """Port security disabled in neutron but enabled on VSD"""
             if self.topology.is_dhcp_agent_enabled():
                 self.skipTest("Running this test with DHCP agent enabled is "
                               "not supported")
@@ -93,6 +95,9 @@ class BaseTestCase(object):
                              discrepancy['discrepancy_details'])
             self.assertEqual(self.port_no_sg['id'],
                              discrepancy['neutron_entity'])
+            self.assertEqual(discrepancy['discrepancy_type'],
+                             'ORPHAN_NEUTRON_ENTITY')
+            self.assertEqual(discrepancy['entity_type'], 'port')
             domain_getter = (
                 self.vsd.vspk_helper.get_default_enterprise().domains
                 if self.router
@@ -108,6 +113,53 @@ class BaseTestCase(object):
 
             # Revert database change
             self.topology.enable_port_security_in_db(self.port_no_sg['id'])
+
+        def test_port_security_mismatch_neutron_enabled(self):
+            """Port security enabled in neutron but disabled on VSD"""
+            if self.topology.is_dhcp_agent_enabled():
+                self.skipTest("Running this test with DHCP agent enabled is "
+                              "not supported")
+
+            self._create_port_security_disabled()
+
+            self.assert_healthy_setup()
+
+            # Change port_security_enabled in neutron database
+            self.topology.enable_port_security_in_db(
+                self.port_port_security_disabled['id'])
+
+            # Audit again
+            audit_report, observed_in_sync = self.system_under_test.audit_sg()
+            self.assert_audit_report_length(1, audit_report)
+            discrepancy = audit_report[0]
+
+            self.assertEqual('Policygroup for less security exists in VSD but '
+                             'there are no neutron ports with port security '
+                             'disabled', discrepancy['discrepancy_details'])
+            self.assertEqual(discrepancy['discrepancy_type'],
+                             'ORPHAN_VSD_ENTITY')
+            self.assertEqual(discrepancy['entity_type'], 'Policygroup')
+            self.assertIsNone(discrepancy['neutron_entity'])
+
+            # Check vsd entity, should be the PG_FOR_LESS_SECURITY
+            domain_getter = (
+                self.vsd.vspk_helper.get_default_enterprise().domains
+                if self.router
+                else self.vsd.vspk_helper.get_default_enterprise().l2_domains)
+            domain_os_id = (self.router['id'] if self.router
+                            else self.subnet['id'])
+            domain_filter = (self.vsd.vspk_helper
+                             .get_external_id_filter(domain_os_id))
+            domain = (domain_getter.get_first(filter=domain_filter))
+            pg_for_less = [pg.id for pg in
+                           self.vsd.get_policy_groups(
+                               domain,
+                               "name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
+            self.assertIn(discrepancy['vsd_entity'], pg_for_less)
+
+            # Revert database change
+            self.topology.disable_port_security_in_db(
+                self.port_port_security_disabled['id'])
 
         def test_missing_rule(self):
             if self.topology.is_dhcp_agent_enabled():
@@ -152,6 +204,20 @@ class BaseTestCase(object):
             vport_filter = (self.vsd.vspk_helper
                             .get_external_id_filter(self.port['id']))
             return domain.vports.get_first(filter=vport_filter)
+
+        def _create_port_security_disabled(self):
+            self.port_port_security_disabled = self.topology.create_port(
+                self.network, port_security_enabled=False,
+                name='port-security-disabled')
+
+            self.expected_in_sync.update({
+                'ingress_acl_entry_templates (PG_FOR_LESS)':
+                    2 * self.topology.counter['ports_security_disabled'],
+                'egress_acl_entry_templates (PG_FOR_LESS)':
+                    2 * self.topology.counter['ports_security_disabled'],
+                'vports (PG_FOR_LESS)':
+                    self.topology.counter['ports_security_disabled']
+            })
 
         def test_missing_vport_to_pg_mapping(self):
             if self.topology.is_dhcp_agent_enabled():
@@ -330,8 +396,7 @@ class SgAuditTestL2(BaseTestCase.SgAuditTestBase):
                 self.topology.counter['sg_rules_egress'],
             'policygroups':
                 self.topology.counter['sgs'],
-            'vports': self.topology.counter['ports_sg']
-        })
+            'vports': self.topology.counter['ports_sg']})
 
 
 class SgAuditTestL3(BaseTestCase.SgAuditTestBase):

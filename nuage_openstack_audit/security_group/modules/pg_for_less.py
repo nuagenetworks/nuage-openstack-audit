@@ -35,8 +35,20 @@ class PGForLessAudit(Audit):
         self.audit_report = []
         self.cnt_in_sync = Counter()
 
-        nr_policygroups = len(policygroups)
-        if nr_policygroups == 0:
+        if not ports:
+            for policygroup in policygroups:
+                self.audit_report.append({
+                    'discrepancy_type': 'ORPHAN_VSD_ENTITY',
+                    'entity_type': 'Policygroup',
+                    'neutron_entity': None,
+                    'vsd_entity': policygroup.id,
+                    'discrepancy_details':
+                        'Policygroup for less security exists in VSD but '
+                        'there are no neutron ports with port security '
+                        'disabled'})
+            return self.audit_report, self.cnt_in_sync
+
+        if not policygroups:
             for port in ports:
                 self.audit_report.append({
                     'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',

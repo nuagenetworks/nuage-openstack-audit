@@ -288,18 +288,17 @@ class SecurityGroupAudit(Audit):
             _, ports = (sg_to_ports.get('{}_{}'.format(PG_FOR_LESS_SECURITY,
                                                        template_type)) or
                         (None, None))
-            if ports:
-                vspk_filter = ("name BEGINSWITH '{}' and type IS '{}' and {}"
-                               .format(PG_FOR_LESS_SECURITY, template_type,
-                                       self.vspk_filter))
-                policygroups = list(self.vsd.get_policy_groups(domain,
-                                                               vspk_filter))
-                audit_report, cnt_in_sync = PGForLessAudit(
-                    self.neutron, self.vsd, self.cms_id).audit(domain,
-                                                               policygroups,
-                                                               ports)
-                self.audit_report += audit_report
-                self.cnt_in_sync += cnt_in_sync
+            vspk_filter = ("name BEGINSWITH '{}' and type IS '{}' and {}"
+                           .format(PG_FOR_LESS_SECURITY, template_type,
+                                   self.vspk_filter))
+            policygroups = list(self.vsd.get_policy_groups(domain,
+                                                           vspk_filter))
+            audit_report, cnt_in_sync = PGForLessAudit(
+                self.neutron, self.vsd, self.cms_id).audit(domain,
+                                                           policygroups,
+                                                           ports)
+            self.audit_report += audit_report
+            self.cnt_in_sync += cnt_in_sync
 
     def _get_router_to_subnet_mapping(self):
         """Get router to subnet dict
