@@ -64,6 +64,18 @@ class Topology1(NeutronTopology):
                                                      vlan_range='0-4095',
                                                      physical_name='gw-port-2',
                                                      port_type='ACCESS')
+        self.gw_port3 = self.vsd.create_gateway_port(self.gateway,
+                                                     name='gw-port-3',
+                                                     user_mnemonic='gw-port-3',
+                                                     vlan_range='0-4095',
+                                                     physical_name='gw-port-3',
+                                                     port_type='ACCESS')
+        self.gw_port4 = self.vsd.create_gateway_port(self.gateway,
+                                                     name='gw-port-4',
+                                                     user_mnemonic='gw-port-4',
+                                                     vlan_range='0-4095',
+                                                     physical_name='gw-port-4',
+                                                     port_type='ACCESS')
 
         # neutron entities
         self.authenticate(SystemUnderTest.get_os_credentials())
@@ -145,6 +157,17 @@ class Topology1(NeutronTopology):
                      "switch_info": self.gateway.system_id}]
             }}
         self.hw_port_l3 = self.create_port(self.networkl3, **hw_port_args)
+        hw_port_args = {
+            'name': 'hw-port',
+            'security_groups': [self.sg_hw_port['id']],
+            'binding:vnic_type': 'baremetal',
+            'binding:host_id': 'dummy',
+            'binding:profile': {
+                "local_link_information": [
+                    {"port_id": self.gw_port2.name,
+                     "switch_info": self.gateway.system_id}]
+            }}
+        self.hw_port_l3_2 = self.create_port(self.networkl3, **hw_port_args)
 
         # Normal ports l2
         self.normal_portl2 = self.create_port(
@@ -170,10 +193,21 @@ class Topology1(NeutronTopology):
             'binding:host_id': 'dummy',
             'binding:profile': {
                 "local_link_information": [
-                    {"port_id": self.gw_port2.name,
+                    {"port_id": self.gw_port3.name,
                      "switch_info": self.gateway.system_id}]
             }}
         self.hw_port_l2 = self.create_port(self.networkl2, **hw_port_args)
+        hw_port_args = {
+            'name': 'hw-port',
+            'security_groups': [self.sg_hw_port['id']],
+            'binding:vnic_type': 'baremetal',
+            'binding:host_id': 'dummy',
+            'binding:profile': {
+                "local_link_information": [
+                    {"port_id": self.gw_port4.name,
+                     "switch_info": self.gateway.system_id}]
+            }}
+        self.hw_port_l2_2 = self.create_port(self.networkl2, **hw_port_args)
 
         self.pg_for_less_active = True
         self.hardware_port = True
@@ -327,13 +361,34 @@ class SgAuditMockTest(TestBase):
                               discrepancy['discrepancy_type'])
 
     def _mock_get_ports_missing_port(self, filters=None, fields=None):
-        # Leave out a normal port but otherwise execute as normal
+        # Note that because of mocking, self is the Neutronclient here
+
+        # Leave out removed ports but otherwise execute as normal
+        removed_ports = SgAuditMockTest._removed_ports()
         kwargs = {}
         if filters:
             kwargs = filters
         # Ignore fields passed as we do need the name field for testing
         ports = self.client.list_ports(**kwargs)['ports']
-        return filter(lambda port: port['name'] != 'normal_port1', ports)
+        return filter(lambda port: port['id'] not in removed_ports, ports)
+
+    def _get_vports(self, os_port_ids):
+        vspk_helper = self.topology.vsd.vspk_helper
+        external_id_func = (self.topology.vsd.vspk_helper
+                            .get_external_id_filter)
+
+        l2_dom = (vspk_helper.get_default_enterprise().l2_domains
+                  .get_first(external_id_func(self.topology.subnetl2['id'])))
+        l3_dom = (vspk_helper.get_default_enterprise().domains
+                  .get_first(external_id_func(self.topology.router['id'])))
+
+        external_id_filters = map(external_id_func, os_port_ids)
+        filter_str = ' OR '.join(external_id_filters)
+        for domain in [l2_dom, l3_dom]:
+            vports = VspkHelper.get_all(parent=domain, filter=filter_str,
+                                        fetcher_str="vports")
+            for vport in vports:
+                yield vport
 
     @mock.patch.object(NeutronClient, 'get_ports',
                        _mock_get_ports_missing_port)
@@ -342,26 +397,30 @@ class SgAuditMockTest(TestBase):
         if self.topology.is_dhcp_agent_enabled():
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
-        audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        # Expected in sync: -2 because of the normal_port1 being excluded
-        expected_in_sync = (self.topology.counter['ports_sg'] +
-                            self.topology.counter['domains'] *
-                            (self.topology.counter['sgs'] +
-                             self.topology.counter['sg_rules_ingress'] +
-                             self.topology.counter['sg_rules_egress']) +
-                            self.topology.pg_for_less_active * 4 *
-                            self.topology.counter['domains'] +
-                            self.topology.hardware_port *
-                            self.topology.counter['domains'] +
-                            self.topology.counter['ports_no_security']) - 2
-        self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
+        audit_report, observed_in_sync = self.system_under_test.audit_sg()
 
-        # Expected discrepancies: 2 ports missing
-        expected_discrepancies = 2
-        self.assert_audit_report_length(expected_discrepancies, audit_report)
+        # validate expected in sync
+        expected_in_sync = self.get_default_expected_in_sync_counter()
+        expected_in_sync['vports'] -= 4
+        expected_in_sync['vports (PG_FOR_LESS)'] -= 2
+        self.assert_counter_equal(expected_in_sync, observed_in_sync)
+
+        # validate discrepancies
+        removed_ports = SgAuditMockTest._removed_ports()
+        removed_ports_vports = [vport.id for vport in
+                                self._get_vports(removed_ports)]
+
+        self.assert_audit_report_length(len(removed_ports), audit_report)
+
         for discrepancy in audit_report:
             self.assert_equal('ORPHAN_VSD_ENTITY',
                               discrepancy['discrepancy_type'])
+            self.assert_equal('Security Group port',
+                              discrepancy['entity_type'])
+            self.assertIn(discrepancy['vsd_entity'], removed_ports_vports)
+            self.assertIsNone(discrepancy['neutron_entity'])
+        self.assert_all_different([discrepancy['vsd_entity']
+                                   for discrepancy in audit_report])
 
     @staticmethod
     def _removed_ports():
@@ -386,8 +445,7 @@ class SgAuditMockTest(TestBase):
             filter_str += ' AND ({})'.format(vspk_filter)
 
         vports = VspkHelper.get_all(
-            parent=self.vspk_helper.get_default_enterprise()
-            if parent is None else parent,
+            parent=parent,
             filter=filter_str,
             fetcher_str="vports")
         return list(vports)

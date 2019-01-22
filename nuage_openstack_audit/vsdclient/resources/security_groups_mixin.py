@@ -107,10 +107,9 @@ class SecurityGroupsMixin(object):
         else:
             return enterprise.l2_domains.get_first(filter=vspk_filter)
 
-    def get_vports(self, parent=None, vspk_filter=None):
+    def get_vports(self, parent, vspk_filter=None):
         return VspkHelper.get_all(
-            parent=self.vspk_helper.get_default_enterprise()
-            if parent is None else parent,
+            parent=parent,
             filter=vspk_filter,
             fetcher_str="vports")
 
