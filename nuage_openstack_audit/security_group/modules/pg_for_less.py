@@ -15,9 +15,9 @@
 from collections import Counter
 
 from nuage_openstack_audit.audit import Audit
-import nuage_openstack_audit.vsdclient.common.constants as constants
 from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPortsPolicyGroupVportsMatcher
+import nuage_openstack_audit.vsdclient.common.constants as constants
 
 
 class PGForLessAudit(Audit):

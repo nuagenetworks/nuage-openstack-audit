@@ -12,8 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import mock
 from collections import Counter
+import mock
 import random
 
 # system under test
@@ -22,10 +22,10 @@ from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
+from nuage_openstack_audit.test.test_base import TestBase
 from nuage_openstack_audit.test.utils.decorators import header
 from nuage_openstack_audit.test.utils.main_args import MainArgs
 from nuage_openstack_audit.test.utils.neutron_topology import NeutronTopology
-from nuage_openstack_audit.test.test_base import TestBase
 from nuage_openstack_audit.test.utils.vsd_test_helper import VSDTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
@@ -242,7 +242,7 @@ class SgAuditTest(TestBase):
                        return_value=[])
     @header()
     def test_missing_policygroups(self, *_):
-        """ Audit on topology with missing policygroups
+        """Audit on topology with missing policygroups
 
         Only hardware block-all rule and PG_for_less are still audited,
         the latter will show discrepancies because of missing policygroups

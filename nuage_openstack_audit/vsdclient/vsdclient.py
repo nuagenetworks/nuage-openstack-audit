@@ -31,7 +31,7 @@ class VsdCredentials(object):
         self.api_version = 'v{}'.format(search(r'(\d+_\d+)', base_uri).group())
 
     def report(self, log):
-        obfuscated_me = vars(self)
+        obfuscated_me = vars(self).copy()
         obfuscated_me['password'] = '***'
 
         log.report('VsdCredentials')

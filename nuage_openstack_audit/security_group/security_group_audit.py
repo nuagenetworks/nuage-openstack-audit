@@ -13,23 +13,24 @@
 #    under the License.
 
 from __future__ import print_function
-from collections import defaultdict, Counter
+from collections import Counter
+from collections import defaultdict
 
 import six
 
 from nuage_openstack_audit.audit import Audit
-from nuage_openstack_audit.utils import logger
-from nuage_openstack_audit.utils.timeit import TimeIt
-from nuage_openstack_audit.security_group.modules.pg_for_less \
-    import PGForLessAudit
 from nuage_openstack_audit.security_group.modules.hardware \
     import HardwarePGAudit
-from nuage_openstack_audit.security_group.security_group_matchers \
-    import SecurityGroupRuleAclTemplateEntryMatcher
+from nuage_openstack_audit.security_group.modules.pg_for_less \
+    import PGForLessAudit
 from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPolicyGroupMatcher
 from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPortsPolicyGroupVportsMatcher
+from nuage_openstack_audit.security_group.security_group_matchers \
+    import SecurityGroupRuleAclTemplateEntryMatcher
+from nuage_openstack_audit.utils import logger
+from nuage_openstack_audit.utils.timeit import TimeIt
 from nuage_openstack_audit.utils.utils import Utils
 from nuage_openstack_audit.vsdclient.common import constants
 
@@ -47,7 +48,7 @@ PG_FOR_LESS_SECURITY = 'PG_FOR_LESS_SECURITY'
 
 
 class SGPortsTuple(object):
-    """ A custom named tuple initialized with empty list of ports"""
+    """A custom named tuple initialized with empty list of ports"""
     def __init__(self, security_group=None, ports=None):
         self.security_group = security_group
         self.ports = ports if ports else []
@@ -301,7 +302,8 @@ class SecurityGroupAudit(Audit):
                 self.cnt_in_sync += cnt_in_sync
 
     def _get_router_to_subnet_mapping(self):
-        """
+        """Get router to subnet dict
+
         Map routerID -> set(subnetID,..)
         Note that None will be mapped to the l2 subnets
         """
@@ -408,7 +410,7 @@ class SecurityGroupAudit(Audit):
                         device_owner_prefix and device_owner.startswith(
                             device_owner_prefix))
         elif cls.is_sriov_port(port):
-            # TODO Add support for SRIOV ports
+            # TODO(Tom) Add support for SRIOV ports
             WARN.h3("Port {} is a SRIOV port. SRIOV audit is not supported. "
                     "Orphan policygroups or orphan policygroup-vport "
                     "associations may be wrongly reported!")

@@ -15,8 +15,8 @@
 from collections import Counter
 
 import neutronclient.common.exceptions as neutron_exceptions
-from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.osclient.osclient import NeutronClient
+from nuage_openstack_audit.utils.logger import Reporter
 
 USER = Reporter('USER')
 

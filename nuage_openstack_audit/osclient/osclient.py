@@ -43,7 +43,7 @@ class OSCredentials(object):
         return url if url.endswith(endswith) else (url + endswith)
 
     def report(self, log):
-        obfuscated_me = vars(self)
+        obfuscated_me = vars(self).copy()
         obfuscated_me['password'] = '***'
 
         log.report('OSCredentials')

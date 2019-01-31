@@ -16,9 +16,9 @@ from __future__ import print_function
 
 import testtools
 
+from nuage_openstack_audit.test.utils.decorators import header
 from nuage_openstack_audit.utils.logger import get_logger
 from nuage_openstack_audit.utils.logger import Reporter
-from nuage_openstack_audit.test.utils.decorators import header
 
 # run me using:
 # python -m testtools.run nuage_openstack_audit/test/utils_test.py

@@ -12,8 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
 import functools32
+import logging
 import netaddr
 
 from nuage_openstack_audit.vsdclient.common import constants
