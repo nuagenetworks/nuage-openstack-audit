@@ -15,8 +15,9 @@
 import argparse
 import json
 import os
-import six
 import time
+
+import six
 
 from nuage_openstack_audit.utils.developer import DeveloperModus
 from nuage_openstack_audit.utils.logger import Reporter
@@ -39,7 +40,8 @@ class Main(object):
     Nuage OpenStack Audit is auditing networking resources between
     OpenStack neutron and the Nuage Networks VCS platform.'''
 
-    def __init__(self, args=None):
+    def __init__(self, args=None, os_credentials=None,
+                 vsd_credentials=None, cms_id=None):
 
         # housekeeping & parse command line arguments
         self.initiating_time = time.strftime("%d-%m-%Y_%H:%M:%S")
@@ -80,22 +82,24 @@ class Main(object):
             WARN.report('Project specific audit: ignoring VSD orphans.')
 
         # retrieve credential info from environment variables
-        cms_id = self.get_cms_id()
-        os_credentials = self.get_os_credentials()
-        vsd_credentials = self.get_vsd_credentials()
+        self.cms_id = self.get_cms_id() if not cms_id else cms_id
+        self.os_credentials = (self.get_os_credentials()
+                               if not os_credentials else os_credentials)
+        self.vsd_credentials = (self.get_vsd_credentials()
+                                if not vsd_credentials else vsd_credentials)
 
         # init logging
         self.init_logger(self.initiating_time)
 
         # initialize and authenticate the clients
         USER.h1('Authenticating with OpenStack')
-        os_credentials.report(DEBUG)
-        self.neutron = self.get_neutron_client(os_credentials, self.project_id)
+        self.os_credentials.report(DEBUG)
+        self.neutron = self.get_neutron_client(self.os_credentials,
+                                               self.project_id)
 
         USER.h1('Authenticating with Nuage VSD')
-        vsd_credentials.report(DEBUG)
-        self.cms_id = cms_id
-        self.vsd = self.get_vsd_client(cms_id, vsd_credentials)
+        self.vsd_credentials.report(DEBUG)
+        self.vsd = self.get_vsd_client(self.cms_id, vsd_credentials)
 
     def init_logger(self, initiating_time):
         from nuage_openstack_audit.utils.logger import get_logger

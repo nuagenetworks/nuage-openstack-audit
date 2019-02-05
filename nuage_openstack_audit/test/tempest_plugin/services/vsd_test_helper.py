@@ -12,13 +12,30 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from tempest import config
+
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient
+from nuage_openstack_audit.vsdclient.vsdclient import VsdCredentials
+
+VSD_CONF = config.CONF.nuage_openstack_audit
+VSD_CREDENTIALS = VsdCredentials(
+    vsd_server=VSD_CONF.nuage_vsd_server,
+    user=VSD_CONF.nuage_vsd_user,
+    password=VSD_CONF.nuage_vsd_password,
+    base_uri=VSD_CONF.nuage_base_uri,
+    enterprise=VSD_CONF.nuage_default_netpartition)
+CMS_ID = VSD_CONF.nuage_cms_id
 
 
 class VSDTestHelper(VsdClient):
 
-    def __init__(self, cms_id):
-        super(VSDTestHelper, self).__init__(cms_id)
+    def __init__(self, cms_id=None):
+        super(VSDTestHelper, self).__init__(
+            cms_id if cms_id else CMS_ID)
+
+    def authenticate(self, credentials=None):
+        super(VSDTestHelper, self).authenticate(
+            credentials if credentials else VSD_CREDENTIALS)
 
     def create_gateway(self, **kwargs):
         new_gateway = self.vspk_helper.vspk.NUGateway(**kwargs)

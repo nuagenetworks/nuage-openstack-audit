@@ -13,27 +13,29 @@
 #    under the License.
 
 from collections import Counter
-import testtools
 import time
 from uuid import uuid4 as uuid
+
+import testtools
 
 # system under test
 from nuage_openstack_audit.main import Main as SystemUnderTest
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
 from nuage_openstack_audit.utils.logger import Reporter
 
 INFO = Reporter('INFO')
-
-
-# run me using:
-# python -m testtools.run \
-#   nuage_openstack_audit/test/test_sg_audit_performance.py
 
 
 def timeit(method):
@@ -52,17 +54,21 @@ def timeit(method):
 class ScaleRouterPerfTest(TestBase):
     """Increasing number of security groups"""
 
-    system_under_test = SystemUnderTest(MainArgs('security_group'))
-
     def __init__(self, *args, **kwargs):
         super(ScaleRouterPerfTest, self).__init__(*args, **kwargs)
         self.expected_in_sync = Counter()
 
     @classmethod
     def setUpClass(cls):
+        cls.system_under_test = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+
         # Neutron
-        cls.topology = NeutronTopology()
-        cls.topology.authenticate(SystemUnderTest.get_os_credentials())
+        cls.topology = NeutronTestHelper()
+        cls.topology.authenticate()
 
     def setUp(self):
         super(ScaleRouterPerfTest, self).setUp()
@@ -152,16 +158,20 @@ class ScaleRouterPerfTest(TestBase):
 class ScaleSGPerfTest(TestBase):
     """Increasing number of security groups"""
 
-    system_under_test = SystemUnderTest(MainArgs('security_group'))
-
     def __init__(self, *args, **kwargs):
         super(ScaleSGPerfTest, self).__init__(*args, **kwargs)
         self.expected_in_sync = Counter()
 
     @classmethod
     def setUpClass(cls):
+        cls.system_under_test = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+
         # Neutron
-        cls.topology = NeutronTopology()
+        cls.topology = NeutronTestHelper()
         cls.topology.authenticate(SystemUnderTest.get_os_credentials())
 
         cls.network = cls.topology.create_network(name=uuid())

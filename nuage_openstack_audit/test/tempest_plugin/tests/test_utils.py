@@ -21,9 +21,6 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
 from nuage_openstack_audit.utils.logger import get_logger
 from nuage_openstack_audit.utils.logger import Reporter
 
-# run me using:
-# python -m testtools.run nuage_openstack_audit/test/utils_test.py
-
 USER = Reporter('USER')
 WARN = Reporter('WARN')
 

@@ -13,6 +13,7 @@
 #    under the License.
 
 import abc
+
 import six
 
 from nuage_openstack_audit.utils.entity_tracker import tracked

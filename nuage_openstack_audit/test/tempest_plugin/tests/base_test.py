@@ -13,8 +13,11 @@
 #    under the License.
 
 from collections import Counter
+
 import six
 import testtools
+
+from tempest import test
 
 from nuage_openstack_audit.utils.logger import Reporter
 
@@ -73,3 +76,7 @@ class TestBase(testtools.TestCase):
     @staticmethod
     def assert_all_different(a_list):
         assert len(a_list) == len(set(a_list))
+
+    @staticmethod
+    def is_extension_fwaas_enabled():
+        return test.is_extension_enabled('fwaas', 'network')

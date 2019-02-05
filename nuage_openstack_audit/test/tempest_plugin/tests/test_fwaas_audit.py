@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import mock
+import testtools
 
 # system under test
 from nuage_openstack_audit.main import Main  # system under test
@@ -22,18 +23,22 @@ from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
     import header
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
-# run me using:
-# python -m testtools.run nuage_openstack_audit/test/fwaas_audit_test.py
 
 # *****************************************************************************
 #  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
@@ -92,8 +97,8 @@ class FirewallAuditBase(TestBase):
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
-            cls.neutron = NeutronTopology()
-            cls.neutron.authenticate(Main.get_os_credentials())
+            cls.neutron = NeutronTestHelper()
+            cls.neutron.authenticate()
 
             USER.report('\n=== Creating %d OpenStack firewalls ===',
                         cls.nbr_firewalls)
@@ -129,7 +134,8 @@ class FirewallAuditBase(TestBase):
                     cls.nbr_firewalls_down += 1
 
         USER.report('\n=== Launching system under test ===')
-        cls.main = Main(MainArgs('fwaas'))
+        cls.main = Main(MainArgs('fwaas'), os_credentials=OS_CREDENTIALS,
+                        vsd_credentials=VSD_CREDENTIALS, cms_id=CMS_ID)
 
     @classmethod
     def tearDownClass(cls):
@@ -165,6 +171,8 @@ class FirewallAuditBase(TestBase):
                                      nbr_entities_in_sync)
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AdminUpFirewallAuditTest(FirewallAuditBase):
 
     nbr_firewalls = get_nbr_firewalls_under_test()
@@ -277,6 +285,8 @@ class AdminUpFirewallAuditTest(FirewallAuditBase):
                                      nbr_entities_in_sync)
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AdminDownFirewallAuditTest(FirewallAuditBase):
 
     nbr_firewalls = get_nbr_firewalls_under_test()
@@ -286,6 +296,8 @@ class AdminDownFirewallAuditTest(FirewallAuditBase):
         return False
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AlternatingFirewallStatesAuditTest(FirewallAuditBase):
 
     nbr_firewalls = get_nbr_firewalls_under_test()

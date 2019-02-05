@@ -13,19 +13,36 @@
 #    under the License.
 
 from collections import Counter
+try:
+    from urllib.parse import urlparse
+except Exception:
+    import urlparse
+
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base as sqlalchemy_automap
 from sqlalchemy.orm import sessionmaker as sqlalchemy_sessionmaker
-from urlparse import urlparse
+from tempest import config
 
 import neutronclient.common.exceptions as neutron_exceptions
 from nuage_openstack_audit.osclient.osclient import NeutronClient
+from nuage_openstack_audit.osclient.osclient import OSCredentials
 from nuage_openstack_audit.utils.logger import Reporter
 
 USER = Reporter('USER')
 
+OS_CREDENTIALS = OSCredentials(
+    auth_url=config.CONF.identity.uri_v3,
+    username=config.CONF.auth.admin_username,
+    password=config.CONF.auth.admin_password,
+    project_name=config.CONF.auth.admin_project_name,
+    project_domain_name=config.CONF.auth.admin_domain_name,
+    user_domain_name=config.CONF.auth.admin_domain_name,
+    identity_api_version=3.0,
+    verify_ca=False,
+    ca_cert=None)
 
-class NeutronTopology(object):
+
+class NeutronTestHelper(object):
     """Set up and tear down a neutron topology"""
 
     teardown_action_stack = []
@@ -56,16 +73,18 @@ class NeutronTopology(object):
         self.neutron_db_classes = None
         self.neutron_session_class = None
 
-    def authenticate(self, credentials, db_access=False):
+    def authenticate(self, credentials=None, db_access=False):
+        if not credentials:
+            credentials = OS_CREDENTIALS
         self.neutron.authenticate(credentials)
-
         # Neutron database
         if db_access:
             auth_url = credentials.auth_url
             devstack_ip_with_port = urlparse(auth_url).netloc
             devstack_ip = devstack_ip_with_port.split(':')[0]
-            engine_str = ('mysql+pymysql://root:admin@{}/neutron?charset=utf8'
-                          .format(devstack_ip))
+            mysql_password = config.CONF.nuage_openstack_audit.mysql_password
+            engine_str = ('mysql+pymysql://root:{}@{}/neutron?charset=utf8'
+                          .format(mysql_password, devstack_ip))
             engine = sqlalchemy.create_engine(engine_str, echo=False,
                                               encoding='utf-8')
             automap_base = sqlalchemy_automap()

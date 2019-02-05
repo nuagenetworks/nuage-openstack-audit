@@ -13,30 +13,32 @@
 #    under the License.
 
 from collections import Counter
-import mock
 import random
 
+import mock
 # system under test
 from nuage_openstack_audit.main import Main as SystemUnderTest
 from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSDTestHelper
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
     import header
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.vsd_test_helper \
-    import VSDTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
-
-# run me using:
-# python -m testtools.run \
-#   nuage_openstack_audit/test/test_sg_audit_by_mocking.py
 
 
 WARN = Reporter('WARN')
@@ -44,13 +46,13 @@ USER = Reporter('USER')
 INFO = Reporter('INFO')
 
 
-class Topology1(NeutronTopology):
+class Topology(NeutronTestHelper):
     def __init__(self):
-        super(Topology1, self).__init__()
+        super(Topology, self).__init__()
 
         # vsd entities
-        self.vsd = VSDTestHelper(SystemUnderTest.get_cms_id())
-        self.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
+        self.vsd = VSDTestHelper()
+        self.vsd.authenticate()
 
         USER.report('\n=== Creating VSD gateway resources ===')
         self.gateway = self.vsd.create_gateway(
@@ -83,7 +85,7 @@ class Topology1(NeutronTopology):
                                                      port_type='ACCESS')
 
         # neutron entities
-        self.authenticate(SystemUnderTest.get_os_credentials())
+        self.authenticate()
 
         USER.report('=== Creating OpenStack router & networks ===')
         self.router = self.create_router(name='test-router')
@@ -218,7 +220,7 @@ class Topology1(NeutronTopology):
         self.hardware_port = True
 
     def teardown(self):
-        super(Topology1, self).teardown()
+        super(Topology, self).teardown()
 
         USER.report('=== Deleting VSD gateway resources ===')
         self.gw_port1.delete()
@@ -233,14 +235,18 @@ class SgAuditMockTest(TestBase):
     It requires a full OS-VSD setup
     """
 
-    system_under_test = SystemUnderTest(MainArgs('security_group'))
-
     @classmethod
     def setUpClass(cls):
         super(SgAuditMockTest, cls).setUpClass()
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
-        cls.topology = Topology1()
+        cls.system_under_test = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+
+        cls.topology = Topology()
 
     @classmethod
     def tearDownClass(cls):

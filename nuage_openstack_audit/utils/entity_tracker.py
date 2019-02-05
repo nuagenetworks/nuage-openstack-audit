@@ -13,9 +13,9 @@
 #    under the License.
 
 import abc
-import six
 
 from nuage_openstack_audit.utils.logger import Reporter
+import six
 
 INFO = Reporter('INFO')
 

@@ -13,7 +13,6 @@
 #    under the License.
 
 from abc import abstractmethod
-import six
 
 
 class Matcher(object):
@@ -48,7 +47,10 @@ class Matcher(object):
 
     def compare(self, neutron_obj, vsd_obj):
         mapped_vsd_obj = self.map_neutron_to_vsd(neutron_obj)
-        for attr_name, mapped_value in six.iteritems(mapped_vsd_obj):
+        # Loop over the vsd object in a deterministic order so discrepancies
+        # are also reported consistently (improves testability)
+        for attr_name in sorted(mapped_vsd_obj.keys()):
+            mapped_value = mapped_vsd_obj[attr_name]
             original_value = getattr(vsd_obj, attr_name)
             if str(mapped_value) != str(original_value):
                 yield (attr_name, '{} != {}'.format(mapped_value,

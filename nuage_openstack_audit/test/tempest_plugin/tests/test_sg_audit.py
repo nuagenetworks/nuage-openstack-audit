@@ -17,18 +17,20 @@ from collections import Counter
 from nuage_openstack_audit.main import Main as SystemUnderTest
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSDTestHelper
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.vsd_test_helper \
-    import VSDTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
-
-# run me using:
-# python -m testtools.run \
-#    nuage_openstack_audit/test/test_sg_audit.py
 
 
 WARN = Reporter('WARN')
@@ -49,7 +51,6 @@ class BaseTestCase(object):
         here is already tested via mocking ; we are just making sure that a
         life system without any mocking is not giving any new surprise.
         """
-        system_under_test = SystemUnderTest(MainArgs('security_group'))
 
         def __init__(self, *args, **kwargs):
             super(BaseTestCase.SgAuditTestBase, self).__init__(*args, **kwargs)
@@ -65,14 +66,19 @@ class BaseTestCase(object):
 
         @classmethod
         def setUpClass(cls):
+            cls.system_under_test = SystemUnderTest(
+                args=MainArgs('security_group'),
+                os_credentials=OS_CREDENTIALS,
+                vsd_credentials=VSD_CREDENTIALS,
+                cms_id=CMS_ID)
+
             # VSD
-            cls.vsd = VSDTestHelper(SystemUnderTest.get_cms_id())
-            cls.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
+            cls.vsd = VSDTestHelper()
+            cls.vsd.authenticate()
 
             # Neutron
-            cls.topology = NeutronTopology()
-            cls.topology.authenticate(SystemUnderTest.get_os_credentials(),
-                                      db_access=True)
+            cls.topology = NeutronTestHelper()
+            cls.topology.authenticate(db_access=True)
 
         def tearDown(self):
             super(BaseTestCase.SgAuditTestBase, self).tearDown()
@@ -520,12 +526,17 @@ class NoDiscrepancies(TestBase):
     Auditing a real system with validation of audit report and
     entities_in_sync. It requires a full OS-VSD setup
     """
-    system_under_test = SystemUnderTest(MainArgs('security_group'))
 
     @classmethod
     def setUpClass(cls):
-        cls.topology = NeutronTopology()
-        cls.topology.authenticate(SystemUnderTest.get_os_credentials())
+        cls.system_under_test = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+
+        cls.topology = NeutronTestHelper()
+        cls.topology.authenticate()
 
     def test_domain_dependent_pg_for_less(self):
         network = self.topology.create_network(name='test-network')

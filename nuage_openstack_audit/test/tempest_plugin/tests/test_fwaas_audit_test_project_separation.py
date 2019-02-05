@@ -13,22 +13,32 @@
 #    under the License.
 
 from __future__ import print_function
+
+import copy
+
 import mock
+import testtools
 
 # system under test
-from nuage_openstack_audit.main import Main  # system under test
+from nuage_openstack_audit.main import Main as SystemUnderTest
 from nuage_openstack_audit.osclient.osclient import KeystoneClient
 from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
     import header
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
@@ -93,10 +103,10 @@ class FirewallAuditProjectSeparationBase(TestBase):
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
-            cls.neutron = NeutronTopology()
-            cls.neutron.authenticate(Main.get_os_credentials())
+            cls.neutron = NeutronTestHelper()
+            cls.neutron.authenticate(OS_CREDENTIALS)
             cls.keystone = KeystoneClient()
-            cls.keystone.authenticate(Main.get_os_credentials())
+            cls.keystone.authenticate(OS_CREDENTIALS)
             USER.report('\n=== Creating Keystone Project1 and Project2 ===')
             cls.project1 = cls.keystone.client.projects.create(
                 'test-project1-fw', 'default')
@@ -165,11 +175,24 @@ class FirewallAuditProjectSeparationBase(TestBase):
                     cls.nbr_firewalls_down += 2
 
         USER.report('\n=== Launching system under test ===')
-        cls.sut = Main(MainArgs('security_group'))
-        cls.sut_project_1 = Main(MainArgs(
-            'fwaas', project=cls.project1.id))
-        cls.sut_project_2 = Main(MainArgs(
-            'fwaas', project=cls.project2.id))
+        cls.sut = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID
+        )
+        cls.sut_project_1 = SystemUnderTest(
+            args=MainArgs('fwaas', project=cls.project1.id),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID
+        )
+        cls.sut_project_2 = SystemUnderTest(
+            args=MainArgs('fwaas', project=cls.project2.id),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -215,23 +238,33 @@ class FirewallAuditProjectSeparationBase(TestBase):
 
     @header()
     def test_firewall_audit_project_user(self):
-        os_credentials = self.sut.get_os_credentials()
         user1 = self.keystone.client.users.create(
             'user-project1', project=self.project1,
-            password=os_credentials.password)
-        os_credentials.project_name = self.project1.name
-        os_credentials.username = user1.name
+            password=OS_CREDENTIALS.password)
+        self.addCleanup(self.keystone.client.users.delete, user1.id)
 
-        role = next(role for role in self.keystone.client.roles.list() if
-                    role.name == 'Member')
+        user_os_credentials = copy.deepcopy(OS_CREDENTIALS)
+        user_os_credentials.project_name = self.project1.name
+        user_os_credentials.username = user1.name
+
+        role = next((role for role in self.keystone.client.roles.list()
+                     if role.name == 'member'), None)
+
+        # stable/queens has capitalized role name
+        if not role:
+            role = next((role for role in self.keystone.client.roles.list()
+                         if role.name == 'Member'))
+
         self.keystone.client.roles.grant(role, user=user1,
                                          project=self.project1)
-        sut_user1 = Main(MainArgs(
-            'fwaas', project=self.project1.id))
-        sut_user1.neutron = sut_user1.get_neutron_client(os_credentials,
+        sut_user1 = SystemUnderTest(
+            args=MainArgs('security_group', project=self.project1.id),
+            os_credentials=user_os_credentials,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+        sut_user1.neutron = sut_user1.get_neutron_client(user_os_credentials,
                                                          self.project1.id)
         audit_report, observed_in_sync = sut_user1.audit_fwaas()
-        self.keystone.client.users.delete(user1.id)
         self.assert_audit_report_length(0, audit_report)
         expected_nbr_entities_in_sync = (
             self.nbr_firewalls_up +
@@ -243,6 +276,8 @@ class FirewallAuditProjectSeparationBase(TestBase):
                                      observed_in_sync)
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AdminUpFirewallAuditProjectSeparationTest(
         FirewallAuditProjectSeparationBase):
 
@@ -361,6 +396,8 @@ class AdminUpFirewallAuditProjectSeparationTest(
         self.assert_entities_in_sync(expected_in_sync / 2, observed_in_sync2)
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AdminDownFirewallAuditProjectSeparationTest(
         FirewallAuditProjectSeparationBase):
 
@@ -371,6 +408,8 @@ class AdminDownFirewallAuditProjectSeparationTest(
         return False
 
 
+@testtools.skipUnless(TestBase.is_extension_fwaas_enabled(),
+                      reason='fwaas is not enabled')
 class AlternatingFirewallStatesAuditProjectSeparationTest(
         FirewallAuditProjectSeparationBase):
 

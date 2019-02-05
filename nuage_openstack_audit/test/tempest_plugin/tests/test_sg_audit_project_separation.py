@@ -13,9 +13,10 @@
 #    under the License.
 
 from collections import Counter
-import mock
+import copy
 import random
 
+import mock
 # system under test
 from nuage_openstack_audit.main import Main as SystemUnderTest
 from nuage_openstack_audit.osclient.osclient import KeystoneClient
@@ -23,21 +24,23 @@ from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import NeutronTestHelper
+from nuage_openstack_audit.test.tempest_plugin.services.neutron_test_helper \
+    import OS_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import CMS_ID
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSD_CREDENTIALS
+from nuage_openstack_audit.test.tempest_plugin.services.vsd_test_helper \
+    import VSDTestHelper
+from nuage_openstack_audit.test.tempest_plugin.tests.base_test import TestBase
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
     import header
 from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
-    import NeutronTopology
-from nuage_openstack_audit.test.tempest_plugin.tests.utils.vsd_test_helper \
-    import VSDTestHelper
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
-
-# run me using:
-# python -m testtools.run \
-#   nuage_openstack_audit/test/test_sg_audit_project_separation.py
 
 
 WARN = Reporter('WARN')
@@ -45,15 +48,15 @@ USER = Reporter('USER')
 INFO = Reporter('INFO')
 
 
-class TopologyProjectSeperation(NeutronTopology):
+class TopologyProjectSeperation(NeutronTestHelper):
 
     def __init__(self):
         super(TopologyProjectSeperation, self).__init__()
         self.keystone = KeystoneClient()
 
         # vsd entities
-        self.vsd = VSDTestHelper(SystemUnderTest.get_cms_id())
-        self.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
+        self.vsd = VSDTestHelper()
+        self.vsd.authenticate()
         USER.report('\n=== Creating VSD gateway resources ===')
         self.gateway = self.vsd.create_gateway(
             name='wbx-' + str(random.randint(1, 0x7fffffff)),
@@ -109,8 +112,7 @@ class TopologyProjectSeperation(NeutronTopology):
             port_type='ACCESS')
 
         # neutron entities
-        os_credentials = SystemUnderTest.get_os_credentials()
-        self.authenticate(os_credentials)
+        self.authenticate()
 
         # Create two projects
         self.project1 = self.keystone.client.projects.create(
@@ -473,9 +475,11 @@ class TopologyProjectSeperation(NeutronTopology):
         self.keystone.client.projects.delete(self.project1.id)
         self.keystone.client.projects.delete(self.project2.id)
 
-    def authenticate(self, credentials, db_access=False):
+    def authenticate(self, credentials=None, db_access=False):
         super(TopologyProjectSeperation, self).authenticate(credentials,
                                                             db_access)
+        if not credentials:
+            credentials = OS_CREDENTIALS
         self.keystone.authenticate(credentials)
 
 
@@ -492,11 +496,21 @@ class SgMockProjectSepTest(TestBase):
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         cls.topology = TopologyProjectSeperation()
-        cls.sut = SystemUnderTest(MainArgs('security_group'))
-        cls.sut_project_1 = SystemUnderTest(MainArgs(
-            'security_group', project=cls.topology.project1.id))
-        cls.sut_project_2 = SystemUnderTest(MainArgs(
-            'security_group', project=cls.topology.project2.id))
+        cls.sut = SystemUnderTest(
+            args=MainArgs('security_group'),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+        cls.sut_project_1 = SystemUnderTest(
+            args=MainArgs('security_group', project=cls.topology.project1.id),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+        cls.sut_project_2 = SystemUnderTest(
+            args=MainArgs('security_group', project=cls.topology.project2.id),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
 
     @classmethod
     def tearDownClass(cls):
@@ -566,23 +580,33 @@ class SgMockProjectSepTest(TestBase):
     def test_no_discrepancies_project_user(self):
         keystone_client = self.topology.keystone.client
         project1 = self.topology.project1
-        os_credentials = self.sut.get_os_credentials()
         user1 = keystone_client.users.create(
             'user-project1', project=project1,
-            password=os_credentials.password)
-        os_credentials.project_name = project1.name
-        os_credentials.username = user1.name
+            password=OS_CREDENTIALS.password)
+        self.addCleanup(keystone_client.users.delete, user1.id)
 
-        role = next(role for role in keystone_client.roles.list() if
-                    role.name == 'Member')
+        user_os_credentials = copy.deepcopy(OS_CREDENTIALS)
+        user_os_credentials.project_name = project1.name
+        user_os_credentials.username = user1.name
+
+        role = next((role for role in keystone_client.roles.list()
+                     if role.name == 'member'), None)
+
+        # stable/queens has capitalized role name
+        if not role:
+            role = next((role for role in keystone_client.roles.list()
+                         if role.name == 'Member'))
+
         keystone_client.roles.grant(role, user=user1, project=project1)
-        sut_user1 = SystemUnderTest(MainArgs(
-            'security_group', project=project1.id))
-        sut_user1.neutron = sut_user1.get_neutron_client(os_credentials,
+        sut_user1 = SystemUnderTest(
+            args=MainArgs('security_group', project=project1.id),
+            os_credentials=user_os_credentials,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+        sut_user1.neutron = sut_user1.get_neutron_client(user_os_credentials,
                                                          project1.id)
         audit_report, observed_in_sync = self.sut_project_1.audit_sg()
         # Delete before assertions as it is not part of normal cleanup
-        keystone_client.users.delete(user1.id)
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
         self.assert_counter_equal(expected_in_sync, observed_in_sync)
         self.assert_audit_report_length(0, audit_report)

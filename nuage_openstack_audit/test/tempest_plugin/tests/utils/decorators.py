@@ -13,8 +13,9 @@
 #    under the License.
 
 import functools
-import six
 import time
+
+import six
 
 REPORT_EXECUTION_TIME = False
 

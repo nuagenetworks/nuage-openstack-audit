@@ -2,7 +2,82 @@
     check:
       jobs:
         - openstack-tox-pep8
+        - networking-nuage-audit-queens
+        - networking-nuage-audit-rocky
+        - networking-nuage-audit-stein
+        - networking-nuage-audit-master
 
     gate:
       jobs:
         - openstack-tox-pep8
+        - networking-nuage-audit-queens
+
+    periodic:
+      jobs:
+        - networking-nuage-audit-queens
+
+- job:
+    name: networking-nuage-audit-base
+    parent: networking-nuage-base
+    description: Nuage openstack audit intergation job
+    nodeset: openstack-single-node-xenial
+    timeout: 10800
+    vars:
+      tempest_concurrency: 1
+      devstack_localrc:
+        NEUTRON_CREATE_INITIAL_NETWORKS: false
+      devstack_plugins:
+        nuage-openstack-audit: https://github.com/nuagenetworks/nuage-openstack-audit.git
+      tempest_plugins:
+        - nuage-tempest-plugin
+        - nuage-openstack-audit
+      tempest_test_regex: ^nuage_openstack_audit
+      tempest_black_regex: .+\.[a-zA-Z]+Base\..+
+
+- job:
+    name: networking-nuage-audit-queens
+    parent: networking-nuage-audit-base
+    override-checkout: stable/queens
+    required-projects:
+      - openstack/neutron-fwaas
+    vars:
+      branch_override: stable/queens
+      devstack_localrc:
+        TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
+        FWAAS_PLUGIN: NuageFWaaS
+      devstack_plugins:
+        neutron-fwaas: https://opendev.org/openstack/neutron-fwaas
+      devstack_services:
+        q-fwaas-v1: true
+
+- job:
+    name: networking-nuage-audit-rocky
+    parent: networking-nuage-audit-base
+    override-checkout: stable/rocky
+    required-projects:
+      - openstack/neutron-fwaas
+    vars:
+      branch_override: stable/rocky
+      devstack_localrc:
+        TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
+        FWAAS_PLUGIN: NuageFWaaS
+      devstack_plugins:
+        neutron-fwaas: https://opendev.org/openstack/neutron-fwaas
+      devstack_services:
+        q-fwaas-v1: true
+
+- job:
+    name: networking-nuage-audit-stein
+    parent: networking-nuage-audit-base
+    override-checkout: stable/stein
+    vars:
+      branch_override: stable/stein
+      devstack_localrc:
+        TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
+
+- job:
+    name: networking-nuage-audit-master
+    parent: networking-nuage-audit-base
+    vars:
+      devstack_localrc:
+        TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
