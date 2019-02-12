@@ -43,6 +43,9 @@ Use
       $ . ~/nuage-audit/bin/activate
       $ pip install <delivered .whl file>
 
+   When upgrading to a new version, pip install the newer .whl file in the
+   existing environment.
+
 3. Set up API access to neutron and VSD, using configuration environment
    variables as shown above.
 
@@ -54,22 +57,56 @@ Use
       $ . etc/nuage-openstack-audit.rc
       $ . stackrc
 
-4. Use:
+4. Use command line argument '--help' for help:
 
    .. code-block:: bash
 
-      $ nuage-openstack-audit -h
+      $ nuage-openstack-audit --help
 
-   for help.
+        usage: nuage-openstack-audit [-h] [-v] [-d] [-o REPORT]
+                                     {fwaas,security_group,all}
 
-5. Launch a FWaaS audit:
+        Nuage OpenStack Audit is auditing networking resources between OpenStack
+        neutron and the Nuage Networks VCS platform.
 
-   .. code-block:: bash
+        positional arguments:
+          {fwaas,security_group,all}
+                                resources to audit
 
-      $ nuage-openstack-audit fwaas
+        optional arguments:
+          -h, --help            show this help message and exit
+          -v, --verbose         run with verbose output
+          -d, --debug           log with debug level
+          -o REPORT, --report REPORT
+                                specify the report file
+
+5. Run audit:
+
+    The following three use cases are supported:
+
+    5.1. audit only FWaaS entities
+
+       .. code-block:: bash
+
+          $ nuage-openstack-audit fwaas
+
+    5.2. audit only security group entities
+
+       .. code-block:: bash
+
+          $ nuage-openstack-audit security_group
+
+    5.3. audit both FWaaS and security group entities
+
+       .. code-block:: bash
+
+          $ nuage-openstack-audit all
+
 
 6. Review the audit results. Any identified audit mismatch condition will be
-   reflected in the generated audit report.
+   reflected in the generated audit report.  The audit report will be written
+   to the working directory by default. Alternatively, pass the '-o' or
+   '--report' option to specify an output file.
 
 -----------
 Limitations
