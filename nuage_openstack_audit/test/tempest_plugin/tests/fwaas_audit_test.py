@@ -22,10 +22,12 @@ from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
-from nuage_openstack_audit.test.test_base import TestBase
-from nuage_openstack_audit.test.utils.decorators import header
-from nuage_openstack_audit.test.utils.main_args import MainArgs
-from nuage_openstack_audit.test.utils.neutron_topology \
+from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.tests.utils.decorators \
+    import header
+from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
+    import MainArgs
+from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
     import NeutronTopology
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils

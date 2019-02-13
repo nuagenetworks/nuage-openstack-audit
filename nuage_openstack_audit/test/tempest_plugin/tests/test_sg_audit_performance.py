@@ -21,9 +21,11 @@ from uuid import uuid4 as uuid
 from nuage_openstack_audit.main import Main as SystemUnderTest
 
 # test code
-from nuage_openstack_audit.test.test_base import TestBase
-from nuage_openstack_audit.test.utils.main_args import MainArgs
-from nuage_openstack_audit.test.utils.neutron_topology import NeutronTopology
+from nuage_openstack_audit.test.tempest_plugin.tests.test_base import TestBase
+from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
+    import MainArgs
+from nuage_openstack_audit.test.tempest_plugin.tests.utils.neutron_topology \
+    import NeutronTopology
 from nuage_openstack_audit.utils.logger import Reporter
 
 INFO = Reporter('INFO')
