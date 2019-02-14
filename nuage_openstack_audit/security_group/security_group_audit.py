@@ -154,7 +154,8 @@ class SecurityGroupAudit(Audit):
             egress_sg_rules,
             ingress_acl_entries,
             matcher,
-            external_id_getter=get_sg_ext_id)
+            external_id_getter=get_sg_ext_id,
+            report_tracked_entities=False)
         self.cnt_in_sync['ingress_acl_entry_templates'] += in_sync_count
 
         INFO.h1('Auditing ingress security group rules')
@@ -163,7 +164,8 @@ class SecurityGroupAudit(Audit):
             ingress_sg_rules,
             egress_acl_entries,
             matcher,
-            external_id_getter=get_sg_ext_id)
+            external_id_getter=get_sg_ext_id,
+            report_tracked_entities=False)
         self.cnt_in_sync['egress_acl_entry_templates'] += in_sync_count
 
     @TimeIt.timeit
@@ -233,7 +235,8 @@ class SecurityGroupAudit(Audit):
         ports = sg_to_ports[securitygroup['id']][1]
         self.cnt_in_sync['vports'] += self.audit_entities(
             self.audit_report, ports, vports,
-            SecurityGroupPortsPolicyGroupVportsMatcher())
+            SecurityGroupPortsPolicyGroupVportsMatcher(),
+            report_tracked_entities=False)
 
     @staticmethod
     def get_sg_ext_id(sg):
@@ -272,7 +275,8 @@ class SecurityGroupAudit(Audit):
             policygroups,
             SecurityGroupPolicyGroupMatcher(),
             external_id_getter=self.get_sg_ext_id,
-            on_in_sync=on_in_sync)
+            on_in_sync=on_in_sync,
+            report_tracked_entities=False)
         self.cnt_in_sync['policygroups'] += nr_in_sync
 
         # audit hardware policy group if needed
