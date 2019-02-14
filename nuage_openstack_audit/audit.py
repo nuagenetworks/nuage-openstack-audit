@@ -49,7 +49,8 @@ class Audit(object):
                        excluded_vsd_entity=None,
                        expected_neutron_orphan=None,
                        neutron_id_to_vsd_ids_dict=None,
-                       on_in_sync=None):
+                       on_in_sync=None,
+                       report_tracked_entities=True):
         """Audit a set of neutron/vsd entities.
 
         :param audit_report: the audit report to report to
@@ -67,6 +68,8 @@ class Audit(object):
         :param on_in_sync: function used to verify resource further upon
                            being in sync, going further than the matcher.
                            Called as on_sync(vspk_object, neutron_object)
+        :param report_tracked_entities: Whether output the tracked entity
+                                        counters
         :return number entities in sync
         """
         DEBUG.h2('====== audit_entities (%s) ======',
@@ -144,25 +147,27 @@ class Audit(object):
                     'discrepancy_details': 'N/A'})
                 n_orphans += neutron_entity
 
-        # audited entities
-        v_entities.report()
-        # don't report excludes in non-debug; they are design internal
-        v_excluded_entities.report(level='DEBUG')
-        # detailed reports
-        n_entities.report()
-        n_in_syncs.report()
-        n_mismatches.report()
-        n_expected_orphans.report()
-        n_orphans.report()
-        v_orphans.report()
-
         nbr_entities_in_sync = n_in_syncs.count()
 
-        INFO.h2('%d discrepancies reported',
-                len(audit_report) - initial_audit_report_len)
-        DEBUG.h2('%d entities are in sync', nbr_entities_in_sync)
-        DEBUG.h2('====== audit_entities (%s) complete ======',
-                 entity_matcher.__class__.__name__)
+        if report_tracked_entities:
+            # audited entities
+            v_entities.report()
+            # don't report excludes in non-debug; they are design internal
+            v_excluded_entities.report(level='DEBUG')
+            # detailed reports
+            n_entities.report()
+            n_in_syncs.report()
+            n_mismatches.report()
+            n_expected_orphans.report()
+            n_orphans.report()
+            v_orphans.report()
+
+            INFO.h2('%d discrepancies reported',
+                    len(audit_report) - initial_audit_report_len)
+            DEBUG.h2('%d entities are in sync', nbr_entities_in_sync)
+            DEBUG.h2('====== audit_entities (%s) complete ======',
+                     entity_matcher.__class__.__name__)
+
         return nbr_entities_in_sync
 
     @abc.abstractmethod

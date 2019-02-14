@@ -75,7 +75,8 @@ class PGForLessAudit(Audit):
             vports.extend(self.vsd.get_vports(pg))
         self.cnt_in_sync['vports (PG_FOR_LESS)'] += self.audit_entities(
             self.audit_report, ports, vports,
-            SecurityGroupPortsPolicyGroupVportsMatcher())
+            SecurityGroupPortsPolicyGroupVportsMatcher(),
+            report_tracked_entities=False)
 
         return self.audit_report, self.cnt_in_sync
 
