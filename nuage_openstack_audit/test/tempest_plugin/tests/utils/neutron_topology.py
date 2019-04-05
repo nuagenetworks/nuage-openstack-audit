@@ -98,7 +98,10 @@ class NeutronTopology(object):
         USER.report('=== Teardown of OpenStack test topology ===')
         while self.teardown_action_stack:
             action = self.teardown_action_stack.pop()
-            action()
+            try:
+                action()
+            except Exception:
+                pass
         self.counter = Counter()
 
     def create_subnet_l2(self, *args, **kwargs):
@@ -162,10 +165,10 @@ class NeutronTopology(object):
 
         return self._create_port(*args, **kwargs)
 
-    def create_router(self, name):
+    def create_router(self, name, **kwargs):
+        kwargs['name'] = name
         router = self.neutron.client.create_router(
-            {'router': {
-                'name': name}})['router']
+            {'router': kwargs})['router']
         router_id = router['id']
         self.teardown_action_stack.append(
             lambda: self._delete_router(router_id))
@@ -179,12 +182,14 @@ class NeutronTopology(object):
             print('router %s could not be deleted '
                   'as of conflict error.' % router_id)
 
-    def create_network(self, name, admin_state_up=True):
+    def create_network(self, name, admin_state_up=True, **kwargs):
+        kwargs['name'] = name
+        kwargs['admin_state_up'] = admin_state_up
+        body = {
+            'network': kwargs
+        }
         network = self.neutron.client.create_network(
-            {"network": {
-                "name": name,
-                "admin_state_up": admin_state_up}
-             })['network']
+            body)['network']
         network_id = network['id']
         self.teardown_action_stack.append(
             lambda: self._delete_network(network_id))
@@ -193,10 +198,10 @@ class NeutronTopology(object):
     def _delete_network(self, network_id):
         self.neutron.client.delete_network(network_id)
 
-    def _create_subnet(self, network_id, ip_version, cidr):
+    def _create_subnet(self, network_id, ip_version, cidr, project_id=None):
         subnet = self.neutron.client.create_subnet(
             {"subnet": {"network_id": network_id, "ip_version": ip_version,
-                        "cidr": cidr}}
+                        "cidr": cidr, 'project_id': project_id}}
         )['subnet']
         subnet_id = subnet['id']
         self.teardown_action_stack.append(
@@ -206,9 +211,10 @@ class NeutronTopology(object):
     def _delete_subnet(self, subnet_id):
         self.neutron.client.delete_subnet(subnet_id)
 
-    def _create_port(self, network, **kwargs):
+    def _create_port(self, network, project_id=None, **kwargs):
         body = kwargs or {}
         body['network_id'] = network['id']
+        body['project_id'] = project_id
         body = {'port': body}
         port = self.neutron.client.create_port(body)['port']
         port_id = port['id']
@@ -218,9 +224,10 @@ class NeutronTopology(object):
     def _delete_port(self, port_id):
         self.neutron.client.delete_port(port_id)
 
-    def create_router_interface(self, router_id, subnet_id):
+    def create_router_interface(self, router_id, subnet_id, project_id=None):
         body = {
-            'subnet_id': subnet_id
+            'subnet_id': subnet_id,
+            'project_id': project_id
         }
         ri = self.neutron.client.add_interface_router(router_id, body)
         self.teardown_action_stack.append(
@@ -234,12 +241,12 @@ class NeutronTopology(object):
         return self.neutron.client.remove_interface_router(router_id, body)
 
     def create_firewall_rule(self, protocol='tcp', action='allow',
-                             enabled=True):
+                             enabled=True, **kwargs):
+        kwargs['protocol'] = protocol
+        kwargs['action'] = action
+        kwargs['enabled'] = enabled
         rule = self.neutron.client.create_firewall_rule(
-            {'firewall_rule': {
-                'protocol': protocol,
-                'action': action,
-                'enabled': enabled}})['firewall_rule']
+            {'firewall_rule': kwargs})['firewall_rule']
         rule_id = rule['id']
         self.teardown_action_stack.append(
             lambda: self._delete_firewall_rule(rule_id))
@@ -248,11 +255,11 @@ class NeutronTopology(object):
     def _delete_firewall_rule(self, fw_rule_id):
         self.neutron.client.delete_firewall_rule(fw_rule_id)
 
-    def create_firewall_policy(self, name, rules):
+    def create_firewall_policy(self, name, rules, **kwargs):
+        kwargs['name'] = name
+        kwargs['firewall_rules'] = rules
         policy = self.neutron.client.create_firewall_policy(
-            {'firewall_policy': {
-                'name': name,
-                'firewall_rules': rules}})['firewall_policy']
+            {'firewall_policy': kwargs})['firewall_policy']
         policy_id = policy['id']
         self.teardown_action_stack.append(
             lambda: self._delete_firewall_policy(policy_id))
@@ -261,12 +268,12 @@ class NeutronTopology(object):
     def _delete_firewall_policy(self, policy_id):
         self.neutron.client.delete_firewall_policy(policy_id)
 
-    def create_firewall(self, policy, router, admin_state_up=True):
+    def create_firewall(self, policy, router, admin_state_up=True, **kwargs):
+        kwargs['router_ids'] = [router['id']]
+        kwargs['firewall_policy_id'] = policy['id']
+        kwargs['admin_state_up'] = admin_state_up
         firewall = self.neutron.client.create_firewall(
-            {'firewall': {
-                'router_ids': [router['id']],
-                'firewall_policy_id': policy['id'],
-                'admin_state_up': admin_state_up}})['firewall']
+            {'firewall': kwargs})['firewall']
         firewall_id = firewall['id']
         self.teardown_action_stack.append(
             lambda: self._delete_firewall(firewall_id))

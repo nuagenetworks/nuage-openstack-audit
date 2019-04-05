@@ -64,8 +64,8 @@ class SGPortsTuple(object):
 
 class SecurityGroupAudit(Audit):
 
-    def __init__(self, neutron, vsd, cms_id):
-        super(SecurityGroupAudit, self).__init__(cms_id)
+    def __init__(self, neutron, vsd, cms_id, ignore_vsd_orphans=False):
+        super(SecurityGroupAudit, self).__init__(cms_id, ignore_vsd_orphans)
 
         self.neutron = neutron
         self.vsd = vsd
@@ -284,8 +284,9 @@ class SecurityGroupAudit(Audit):
         if any(map(lambda x: x[0]['type'] == ACL_TEMPLATE_HARDWARE,
                    sg_to_ports.values())):
             my_report, my_counter = HardwarePGAudit(
-                self.neutron, self.vsd, self.cms_id).audit(domain,
-                                                           network_id)
+                self.neutron, self.vsd,
+                self.cms_id, self.ignore_vsd_orphans).audit(domain,
+                                                            network_id)
             self.audit_report += my_report
             self.cnt_in_sync += my_counter
 
@@ -300,9 +301,10 @@ class SecurityGroupAudit(Audit):
             policygroups = list(self.vsd.get_policy_groups(domain,
                                                            vspk_filter))
             audit_report, cnt_in_sync = PGForLessAudit(
-                self.neutron, self.vsd, self.cms_id).audit(domain,
-                                                           policygroups,
-                                                           ports)
+                self.neutron, self.vsd,
+                self.cms_id, self.ignore_vsd_orphans).audit(domain,
+                                                            policygroups,
+                                                            ports)
             self.audit_report += audit_report
             self.cnt_in_sync += cnt_in_sync
 

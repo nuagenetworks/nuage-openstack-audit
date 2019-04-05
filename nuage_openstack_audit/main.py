@@ -58,6 +58,12 @@ class Main(object):
                                 default=None)
             parser.add_argument('resource', help='resources to audit',
                                 choices=['fwaas', 'security_group', 'all'])
+            parser.add_argument('-p', '--project',
+                                help='Project ID of the project to be audited.'
+                                     ' Only resources of this project '
+                                     'will be audited. '
+                                     'This parameter is optional',
+                                default=None)
             args = parser.parse_args()
 
         self.developer_modus = self.check_developer_modus()
@@ -69,6 +75,9 @@ class Main(object):
         self.no_log = hasattr(args, 'no_log') and args.no_log
         self.report = args.report
         self.resource = args.resource
+        self.project_id = args.project
+        if self.project_id:
+            WARN.report('Project specific audit: ignoring VSD orphans.')
 
         # retrieve credential info from environment variables
         cms_id = self.get_cms_id()
@@ -81,7 +90,7 @@ class Main(object):
         # initialize and authenticate the clients
         USER.h1('Authenticating with OpenStack')
         os_credentials.report(DEBUG)
-        self.neutron = self.get_neutron_client(os_credentials)
+        self.neutron = self.get_neutron_client(os_credentials, self.project_id)
 
         USER.h1('Authenticating with Nuage VSD')
         vsd_credentials.report(DEBUG)
@@ -177,14 +186,16 @@ class Main(object):
         from nuage_openstack_audit.fwaas.fwaas_audit import FWaaSAudit
         if not self.verbose:
             USER.h1('Auditing Firewalls')  # redundant when verbose
-        return FWaaSAudit(self.neutron, self.vsd, self.cms_id).audit()
+        return FWaaSAudit(self.neutron, self.vsd, self.cms_id,
+                          self.project_id is not None).audit()
 
     def audit_sg(self):
         from nuage_openstack_audit.security_group.security_group_audit import \
             SecurityGroupAudit
         if not self.verbose:
             USER.h1('Auditing Security Groups')  # redundant when verbose
-        return SecurityGroupAudit(self.neutron, self.vsd, self.cms_id).audit()
+        return SecurityGroupAudit(self.neutron, self.vsd, self.cms_id,
+                                  self.project_id is not None).audit()
 
     def run(self):
         start_time = time.time()
@@ -211,9 +222,9 @@ class Main(object):
         return audit_report, nbr_entities_in_sync
 
     @staticmethod
-    def get_neutron_client(credentials):
+    def get_neutron_client(credentials, project_id=None):
         from nuage_openstack_audit.osclient.osclient import NeutronClient
-        return NeutronClient().authenticate(credentials)
+        return NeutronClient(project_id).authenticate(credentials)
 
     @staticmethod
     def get_vsd_client(cms_id, credentials):

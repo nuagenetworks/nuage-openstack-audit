@@ -22,8 +22,8 @@ import nuage_openstack_audit.vsdclient.common.constants as constants
 
 class PGForLessAudit(Audit):
 
-    def __init__(self, neutron, vsd, cms_id):
-        super(PGForLessAudit, self).__init__(cms_id)
+    def __init__(self, neutron, vsd, cms_id, ignore_vsd_orphans):
+        super(PGForLessAudit, self).__init__(cms_id, ignore_vsd_orphans)
 
         self.neutron = neutron
         self.vsd = vsd
@@ -36,6 +36,9 @@ class PGForLessAudit(Audit):
         self.cnt_in_sync = Counter()
 
         if not ports:
+            if self.ignore_vsd_orphans:
+                # Project isolation cannot detect vsd orphan
+                return self.audit_report, self.cnt_in_sync
             for policygroup in policygroups:
                 self.audit_report.append({
                     'discrepancy_type': 'ORPHAN_VSD_ENTITY',

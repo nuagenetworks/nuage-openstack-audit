@@ -99,9 +99,10 @@ class KeystoneClient(object):
 
 
 class NeutronClient(object):
-    def __init__(self):
+    def __init__(self, project_id=None):
         self.client = None
         self.dhcp_agent_enabled = None
+        self.project_id = project_id
 
     def authenticate(self, credentials):
         from neutronclient.neutron import client as neutron_client
@@ -134,20 +135,29 @@ class NeutronClient(object):
         return self.dhcp_agent_enabled
 
     @TimeIt.timeit
-    def get_firewalls(self):
-        return self.client.list_firewalls()['firewalls']
+    def get_firewalls(self, **params):
+        if self.project_id:
+            params['project_id'] = self.project_id
+        return self.client.list_firewalls(**params)['firewalls']
 
     @TimeIt.timeit
-    def get_firewall_policies(self):
-        return self.client.list_firewall_policies()['firewall_policies']
+    def get_firewall_policies(self, **params):
+        if self.project_id:
+            params['project_id'] = self.project_id
+        return self.client.list_firewall_policies(
+            **params)['firewall_policies']
 
     @TimeIt.timeit
-    def get_firewall_rules(self):
-        return self.client.list_firewall_rules()['firewall_rules']
+    def get_firewall_rules(self, **params):
+        if self.project_id:
+            params['project_id'] = self.project_id
+        return self.client.list_firewall_rules(**params)['firewall_rules']
 
     @TimeIt.timeit
-    def get_routers(self):
-        return self.client.list_routers()['routers']
+    def get_routers(self, **params):
+        if self.project_id:
+            params['project_id'] = self.project_id
+        return self.client.list_routers(**params)['routers']
 
     @TimeIt.timeit
     def get_networks(self, filters=None, fields=None):
@@ -156,6 +166,8 @@ class NeutronClient(object):
             kwargs = filters
         if fields:
             kwargs['fields'] = fields
+        if self.project_id:
+            kwargs['project_id'] = self.project_id
         return self.client.list_networks(**kwargs)['networks']
 
     @TimeIt.timeit
@@ -163,8 +175,15 @@ class NeutronClient(object):
         return self.client.show_subnet(neutron_id)['subnet']
 
     @TimeIt.timeit
-    def get_subnets(self, **params):
-        return self.client.list_subnets(**params)['subnets']
+    def get_subnets(self, filters=None, fields=None):
+        kwargs = {}
+        if filters:
+            kwargs = filters
+        if fields:
+            kwargs['fields'] = fields
+        if self.project_id:
+            kwargs['project_id'] = self.project_id
+        return self.client.list_subnets(**kwargs)['subnets']
 
     @TimeIt.timeit
     def get_ports(self, filters=None, fields=None):
@@ -173,6 +192,8 @@ class NeutronClient(object):
             kwargs = filters
         if fields:
             kwargs['fields'] = fields
+        if self.project_id:
+            kwargs['project_id'] = self.project_id
         return self.client.list_ports(**kwargs)['ports']
 
     @TimeIt.timeit

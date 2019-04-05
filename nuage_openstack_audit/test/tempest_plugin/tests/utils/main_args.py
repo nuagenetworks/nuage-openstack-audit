@@ -37,7 +37,7 @@ USER.newline()
 
 
 class MainArgs(object):
-    def __init__(self, resource, report=None):
+    def __init__(self, resource, report=None, project=None):
         assert resource in ['fwaas', 'security_group', 'all']
 
         self.resource = resource
@@ -46,3 +46,4 @@ class MainArgs(object):
         self.verbose = VERBOSE
         self.extreme_verbose = EXTREME_VERBOSE
         self.debug = DEBUG
+        self.project = project

@@ -24,8 +24,9 @@ DEBUG = Reporter('DEBUG')
 
 class Audit(object):
 
-    def __init__(self, cms_id):
+    def __init__(self, cms_id, ignore_vsd_orphans=False):
         self.vspk_filter = "externalID ENDSWITH '@{}'".format(cms_id)
+        self.ignore_vsd_orphans = ignore_vsd_orphans
 
     @staticmethod
     def strip_cms_id(external_id):
@@ -125,13 +126,16 @@ class Audit(object):
                     n_mismatches += neutron_entity
                 del neutron_ids_to_obj[neutron_id]
             else:
-                audit_report.append({
-                    'discrepancy_type': 'ORPHAN_VSD_ENTITY',
-                    'entity_type': entity_matcher.entity_name(),
-                    'neutron_entity': None,
-                    'vsd_entity': vsd_entity.id,
-                    'discrepancy_details': 'N/A'})
-                v_orphans += vsd_entity
+                if not self.ignore_vsd_orphans:
+                    # VSD orphans can only be audited when there is no project
+                    # isolation.
+                    audit_report.append({
+                        'discrepancy_type': 'ORPHAN_VSD_ENTITY',
+                        'entity_type': entity_matcher.entity_name(),
+                        'neutron_entity': None,
+                        'vsd_entity': vsd_entity.id,
+                        'discrepancy_details': 'N/A'})
+                    v_orphans += vsd_entity
 
         # neutron_ids_set is now unconfirmed set of neutron id's
         for (neutron_id, neutron_entity) in six.iteritems(neutron_ids_to_obj):

@@ -19,8 +19,8 @@ from nuage_openstack_audit.audit import Audit
 
 class HardwarePGAudit(Audit):
 
-    def __init__(self, neutron, vsd, cms_id):
-        super(HardwarePGAudit, self).__init__(cms_id)
+    def __init__(self, neutron, vsd, cms_id, ignore_vsd_orphans=False):
+        super(HardwarePGAudit, self).__init__(cms_id, ignore_vsd_orphans)
 
         self.neutron = neutron
         self.vsd = vsd

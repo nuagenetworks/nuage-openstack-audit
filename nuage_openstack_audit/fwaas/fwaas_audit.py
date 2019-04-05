@@ -32,8 +32,8 @@ class FWaaSAudit(Audit):
     faked_n_policies_for_admin_down_fws = None  # faked neutron policies
     n_rule_ids_to_vsd = None  # mapping neutron rule ids to vsd rule ids
 
-    def __init__(self, neutron, vsd, cms_id):
-        super(FWaaSAudit, self).__init__(cms_id)
+    def __init__(self, neutron, vsd, cms_id, ignore_vsd_orphans=False):
+        super(FWaaSAudit, self).__init__(cms_id, ignore_vsd_orphans)
 
         self.neutron = neutron
         self.vsd = vsd
@@ -171,14 +171,17 @@ class FWaaSAudit(Audit):
             if not router_id_associated:
                 # VSD ACL-router orphan :
                 # in neutron no FW is bound to this rtr with that policy
-                audit_report.append({
-                    'discrepancy_type': 'ORPHAN_VSD_ENTITY',
-                    'entity_type': 'Firewall',
-                    'neutron_entity': None,
-                    'vsd_entity': 'ACL: %s <> Domain: %s' % (
-                        v_acl_id, v_domain_id),
-                    'discrepancy_details': 'N/A'})
-                v_orphans += v_acl_id
+                # VSD orphans can only be audited when there is no project
+                # isolation.
+                if not self.ignore_vsd_orphans:
+                    audit_report.append({
+                        'discrepancy_type': 'ORPHAN_VSD_ENTITY',
+                        'entity_type': 'Firewall',
+                        'neutron_entity': None,
+                        'vsd_entity': 'ACL: %s <> Domain: %s' % (
+                            v_acl_id, v_domain_id),
+                        'discrepancy_details': 'N/A'})
+                    v_orphans += v_acl_id
 
         # now check the neutron orphans
         for fw_r_sets in six.itervalues(n_policy_to_fw_r_sets):
