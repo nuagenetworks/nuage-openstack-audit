@@ -159,8 +159,12 @@ class NeutronClient(object):
         return self.client.list_networks(**kwargs)['networks']
 
     @TimeIt.timeit
-    def get_subnets(self):
-        return self.client.list_subnets()['subnets']
+    def get_subnet(self, neutron_id):
+        return self.client.show_subnet(neutron_id)['subnet']
+
+    @TimeIt.timeit
+    def get_subnets(self, **params):
+        return self.client.list_subnets(**params)['subnets']
 
     @TimeIt.timeit
     def get_ports(self, filters=None, fields=None):

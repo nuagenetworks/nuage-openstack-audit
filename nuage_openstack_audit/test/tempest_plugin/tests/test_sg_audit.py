@@ -106,7 +106,7 @@ class BaseTestCase(object):
                 if self.router
                 else self.vsd.vspk_helper.get_default_enterprise().l2_domains)
             domain_os_id = (self.router['id'] if self.router
-                            else self.subnet['id'])
+                            else self.subnet['network_id'])
             domain_filter = (self.vsd.vspk_helper
                              .get_external_id_filter(domain_os_id))
             domain = (domain_getter.get_first(filter=domain_filter))
@@ -150,7 +150,7 @@ class BaseTestCase(object):
                 if self.router
                 else self.vsd.vspk_helper.get_default_enterprise().l2_domains)
             domain_os_id = (self.router['id'] if self.router
-                            else self.subnet['id'])
+                            else self.subnet['network_id'])
             domain_filter = (self.vsd.vspk_helper
                              .get_external_id_filter(domain_os_id))
             domain = (domain_getter.get_first(filter=domain_filter))
@@ -199,7 +199,7 @@ class BaseTestCase(object):
                 if self.router
                 else self.vsd.vspk_helper.get_default_enterprise().l2_domains)
             domain_os_id = (self.router['id'] if self.router
-                            else self.subnet['id'])
+                            else self.subnet['network_id'])
             domain_filter = (self.vsd.vspk_helper
                              .get_external_id_filter(domain_os_id))
             domain = (domain_getter.get_first(filter=domain_filter))
@@ -296,7 +296,8 @@ class BaseTestCase(object):
 
             # Create some egress acl entry
             acl_filter = (self.vsd.vspk_helper.get_external_id_filter(
-                self.router['id'] if self.router else self.subnet['id']))
+                self.router['id'] if self.router
+                else self.subnet['network_id']))
             egress_acl = (self.vsd.vspk_helper.session.user.
                           egress_acl_templates.get_first(filter=acl_filter))
             pg_filter = (self.vsd.vspk_helper

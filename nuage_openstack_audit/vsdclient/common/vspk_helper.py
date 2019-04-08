@@ -107,6 +107,18 @@ class VspkHelper(object):
             self.get_external_id(object_id))
 
     @staticmethod
+    def get_vsd_filter(keys, values):
+        filter_str = ""
+        if not (isinstance(keys, list) and isinstance(values, list)):
+            keys = [keys]
+            values = [values]
+        for key, value in zip(keys, values):
+            if filter_str:
+                filter_str += " and "
+            filter_str += "{} IS '{}'".format(key, value)
+        return filter_str
+
+    @staticmethod
     def get_all(parent, fetcher_str, **kwargs):
         """Get all objects, abstracting away vsd paging.
 

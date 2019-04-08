@@ -53,9 +53,9 @@ class Topology1(NeutronTopology):
         self.vsd.authenticate(SystemUnderTest.get_vsd_credentials())
 
         USER.report('\n=== Creating VSD gateway resources ===')
-        self.gateway = self.vsd.create_gateway(name='vsg',
-                                               system_id='my-sys_id',
-                                               personality='VSG')
+        self.gateway = self.vsd.create_gateway(
+            name='WBX', system_id='my-sys_id',
+            personality='NUAGE_210_WBX_32_Q')
         self.gw_port1 = self.vsd.create_gateway_port(self.gateway,
                                                      name='gw-port-1',
                                                      user_mnemonic='gw-port-1',
@@ -382,7 +382,8 @@ class SgAuditMockTest(TestBase):
                             .get_external_id_filter)
 
         l2_dom = (vspk_helper.get_default_enterprise().l2_domains
-                  .get_first(external_id_func(self.topology.subnetl2['id'])))
+                  .get_first(external_id_func(
+                             self.topology.subnetl2['network_id'])))
         l3_dom = (vspk_helper.get_default_enterprise().domains
                   .get_first(external_id_func(self.topology.router['id'])))
 

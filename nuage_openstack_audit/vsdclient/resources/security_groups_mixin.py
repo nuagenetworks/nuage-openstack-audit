@@ -95,17 +95,36 @@ class SecurityGroupsMixin(object):
             return enterprise.domains.get_first(filter=vspk_filter)
 
     def get_l2domain(self, enterprise=None, vspk_filter=None,
-                     by_neutron_id=None):
+                     by_network_id=None, by_cidr=None, by_subnet=None,
+                     ip_type=4):
         if not enterprise:
             enterprise = self.vspk_helper.get_default_enterprise()
-
-        if by_neutron_id:
-            return self.get_l2domain(
-                enterprise,
-                vspk_filter=self.vspk_helper.get_external_id_filter(
-                    by_neutron_id))
+        if vspk_filter:
+            l2_domain = enterprise.l2_domains.get_first(filter=vspk_filter)
+        elif by_subnet:
+            return self.get_l2domain(enterprise, vspk_filter,
+                                     by_network_id=by_subnet['network_id'],
+                                     by_cidr=by_subnet['cidr'],
+                                     ip_type=by_subnet['ip_version'])
+        elif by_network_id and by_cidr:
+            if ip_type == 6:
+                vspk_filter = self.vspk_helper.get_vsd_filter(
+                    ['externalID', 'IPv6Address'],
+                    [self.vspk_helper.get_external_id(by_network_id), by_cidr])
+                l2_domain = self.get_l2domain(enterprise, vspk_filter)
+            else:
+                vspk_filter = self.vspk_helper.get_vsd_filter(
+                    ['externalID', 'address'],
+                    [self.vspk_helper.get_external_id(by_network_id),
+                     by_cidr.split('/')[0]])
+                l2_domain = self.get_l2domain(enterprise, vspk_filter)
         else:
-            return enterprise.l2_domains.get_first(filter=vspk_filter)
+            LOG.error('a qualifier is required')
+            return None
+        if not l2_domain:
+            LOG.warning('could not fetch the l2 domain '
+                        'matching the filter "{}"'.format(vspk_filter))
+        return l2_domain
 
     def get_vports(self, parent, vspk_filter=None):
         return VspkHelper.get_all(

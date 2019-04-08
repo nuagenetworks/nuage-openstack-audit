@@ -199,8 +199,8 @@ class SecurityGroupAudit(Audit):
         for subnet_id in subnet_ids:
             INFO.h1('Auditing security groups for subnet {}'
                     '.'.format(subnet_id))
-            domain = self.vsd.get_l2domain(by_neutron_id=subnet_id,
-                                           vspk_filter=self.vspk_filter)
+            subnet = self.neutron.get_subnet(subnet_id)
+            domain = self.vsd.get_l2domain(by_subnet=subnet)
             if domain is None:
                 self.audit_report.append({
                     'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
@@ -209,7 +209,8 @@ class SecurityGroupAudit(Audit):
                     'vsd_entity': None,
                     'discrepancy_details': 'l2-subnet has no l2-domain'})
             else:
-                self.audit_domain(domain, subnet_id, [subnet_id], is_l2=True)
+                self.audit_domain(domain, subnet['network_id'],
+                                  [subnet_id], is_l2=True)
 
     def audit_l3_domain(self, router_id, subnet_ids):
         INFO.h1('Auditing security groups for router {}.'
@@ -243,7 +244,7 @@ class SecurityGroupAudit(Audit):
         return ('hw:' + sg['id']
                 if sg['type'] == ACL_TEMPLATE_HARDWARE else sg['id'])
 
-    def audit_domain(self, domain, os_id, subnet_ids, is_l2):
+    def audit_domain(self, domain, network_id, subnet_ids, is_l2):
         sg_to_ports = self._get_sg_id_to_sg_and_ports_mapping(subnet_ids)
         # Calculate PG -> vports dict
         # vports is a fetcher on policygroup
@@ -283,7 +284,8 @@ class SecurityGroupAudit(Audit):
         if any(map(lambda x: x[0]['type'] == ACL_TEMPLATE_HARDWARE,
                    sg_to_ports.values())):
             my_report, my_counter = HardwarePGAudit(
-                self.neutron, self.vsd, self.cms_id).audit(domain, os_id)
+                self.neutron, self.vsd, self.cms_id).audit(domain,
+                                                           network_id)
             self.audit_report += my_report
             self.cnt_in_sync += my_counter
 
