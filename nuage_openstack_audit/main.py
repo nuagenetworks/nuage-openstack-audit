@@ -178,7 +178,7 @@ class Main(object):
             vsd_server=Utils.get_env_var('OS_VSD_SERVER', required=True),
             user=user,
             password=password,
-            base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v5_0'),
+            base_uri=Utils.get_env_var('OS_VSD_BASE_URI', '/nuage/api/v6'),
             enterprise=Utils.get_env_var('OS_DEFAULT_NETPARTITION',
                                          required=True))
 

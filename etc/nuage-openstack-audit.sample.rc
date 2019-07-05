@@ -51,8 +51,8 @@ export OS_DEFAULT_NETPARTITION=changeme
 # default OS_VSD_SERVER_AUTH is 'csproot:csproot'
 # export OS_VSD_SERVER_AUTH=csproot:csproot
 
-# default OS_VSD_BASE_URI is '/nuage/api/v5_0'
-# export OS_VSD_BASE_URI=/nuage/api/v5_0
+# default OS_VSD_BASE_URI is '/nuage/api/v6'
+# export OS_VSD_BASE_URI=/nuage/api/v6
 
 # default device_owner_prefix is []
 # export OS_DEVICE_OWNER_PREFIX=[]

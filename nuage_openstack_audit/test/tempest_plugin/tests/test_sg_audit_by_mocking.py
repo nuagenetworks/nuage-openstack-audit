@@ -500,11 +500,20 @@ class SgAuditMockTest(TestBase):
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
         audit_report, nr_in_sync = self.system_under_test.audit_sg()
-        expected_in_sync = self.get_default_expected_in_sync_counter()
-        expected_in_sync['ingress_acl_entry_templates'] = 0
-        expected_in_sync['egress_acl_entry_templates'] = (
-            self.topology.counter['domains'] *
-            self.topology.counter['sg_rules_remote'])
+        expected_in_sync = (self.topology.counter['ports_sg'] +
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sgs'] +
+                             self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress']) +
+                            self.topology.pg_for_less_active * 4 *
+                            self.topology.counter['domains'] +
+                            self.topology.hardware_port *
+                            self.topology.counter['domains'] +
+                            self.topology.counter['ports_no_security'] -
+                            self.topology.counter['domains'] *
+                            (self.topology.counter['sg_rules_ingress'] +
+                             self.topology.counter['sg_rules_egress'] -
+                             self.topology.counter['sg_rules_remote']))
 
         self.assert_entities_in_sync(expected_in_sync, nr_in_sync)
 

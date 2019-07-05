@@ -62,37 +62,61 @@ class FirewallRuleMatcher(Matcher):
     def entity_name(self):
         return 'Firewall rule'
 
-    def get_mapper(self):
+    def map_to_vsd_object(self, fw_rule):
         return {
-            'source_ip_address': [
-                ('address_override',
-                 lambda x: str(netaddr.IPNetwork(x).cidr) if x else None)
-            ],
-            'name': [('description', lambda x: x)],
-            'destination_ip_address': [
-                ('network_id',
-                    lambda x: str(netaddr.IPNetwork(x).cidr)
-                    if x else None),
-                ('network_type', lambda x: 'NETWORK' if x else None)
-            ],
-            'source_port': [
-                ('source_port',
-                 lambda x: x.replace(':', '-') if x else None)
-            ],
-            'protocol': [
-                ('protocol',
-                 lambda x: lib_constants.IP_PROTOCOL_MAP.get(x, 'ANY'))
-            ],
-            'destination_port': [
-                ('destination_port', lambda x: x.replace(':', '-')
-                    if x else None)
-            ],
-            'action': [('action',
-                        lambda x: OS_ACTION_TO_VSD_ACTION[x]),
-                       ('stateful',
-                        lambda x: OS_ACTION_TO_VSD_STATEFUL[x])],
-            'ip_version': [
-                ('ether_type',
-                 lambda x: OS_IPVERSION_TO_VSD_ETHERTYPE.get(x))
-            ]
+            'address_override': self._map_address_override(fw_rule),
+            'ipv6_address_override': self._map_ipv6_address_override(fw_rule),
+            'description': fw_rule['name'],
+            'network_id': self._map_network_id(fw_rule),
+            'network_type': self._map_network_type(fw_rule),
+            'source_port': self._map_source_port(fw_rule),
+            'protocol': lib_constants.IP_PROTOCOL_MAP.get(fw_rule['protocol'],
+                                                          'ANY'),
+            'destination_port': self._map_destination_port(fw_rule),
+            'action': OS_ACTION_TO_VSD_ACTION[fw_rule['action']],
+            'stateful': OS_ACTION_TO_VSD_STATEFUL[fw_rule['action']],
+            'ether_type': OS_IPVERSION_TO_VSD_ETHERTYPE[fw_rule['ip_version']]
         }
+
+    @staticmethod
+    def _map_address_override(fw_rule):
+        if fw_rule['ip_version'] == 4 and fw_rule['source_ip_address']:
+            return str(netaddr.IPNetwork(fw_rule['source_ip_address']).cidr)
+        else:
+            return None
+
+    @staticmethod
+    def _map_ipv6_address_override(fw_rule):
+        if fw_rule['ip_version'] == 6 and fw_rule['source_ip_address']:
+            return str(netaddr.IPNetwork(fw_rule['source_ip_address']).cidr)
+        else:
+            return None
+
+    @staticmethod
+    def _map_network_id(fw_rule):
+        if fw_rule['destination_ip_address']:
+            return str(netaddr.IPNetwork(
+                fw_rule['destination_ip_address']).cidr)
+        else:
+            return None
+
+    @staticmethod
+    def _map_network_type(fw_rule):
+        if fw_rule['destination_ip_address']:
+            return 'NETWORK'
+        else:
+            return None
+
+    @staticmethod
+    def _map_source_port(fw_rule):
+        if fw_rule['source_port']:
+            return fw_rule['source_port'].replace(':', '-')
+        else:
+            return None
+
+    @staticmethod
+    def _map_destination_port(fw_rule):
+        if fw_rule['destination_port']:
+            return fw_rule['destination_port'].replace(':', '-')
+        else:
+            return None

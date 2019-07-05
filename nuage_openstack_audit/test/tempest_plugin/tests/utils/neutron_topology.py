@@ -199,10 +199,11 @@ class NeutronTopology(object):
         self.neutron.client.delete_network(network_id)
 
     def _create_subnet(self, network_id, ip_version, cidr, project_id=None):
-        subnet = self.neutron.client.create_subnet(
-            {"subnet": {"network_id": network_id, "ip_version": ip_version,
-                        "cidr": cidr, 'project_id': project_id}}
-        )['subnet']
+        kwargs = {"subnet": {"network_id": network_id,
+                             "ip_version": ip_version, "cidr": cidr}}
+        if project_id:
+            kwargs['subnet']['project_id'] = project_id
+        subnet = self.neutron.client.create_subnet(kwargs)['subnet']
         subnet_id = subnet['id']
         self.teardown_action_stack.append(
             lambda: self._delete_subnet(subnet_id))
@@ -214,7 +215,8 @@ class NeutronTopology(object):
     def _create_port(self, network, project_id=None, **kwargs):
         body = kwargs or {}
         body['network_id'] = network['id']
-        body['project_id'] = project_id
+        if project_id:
+            body['project_id'] = project_id
         body = {'port': body}
         port = self.neutron.client.create_port(body)['port']
         port_id = port['id']

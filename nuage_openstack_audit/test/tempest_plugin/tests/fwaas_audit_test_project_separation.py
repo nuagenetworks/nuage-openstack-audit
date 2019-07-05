@@ -307,9 +307,10 @@ class AdminUpFirewallAuditProjectSeparationTest(
             self.assert_equal('ENTITY_MISMATCH',
                               discrepancy['discrepancy_type'])
             self.assert_equal('Firewall rule', discrepancy["entity_type"])
-            self.assert_equal("('stateful', 'False != True'),"
-                              "('action', 'DROP != FORWARD')",
-                              discrepancy['discrepancy_details'])
+            self.assertIn("('stateful', 'False != True')",
+                          discrepancy['discrepancy_details'])
+            self.assertIn("('action', 'DROP != FORWARD')",
+                          discrepancy['discrepancy_details'])
 
         # expecting calculated entities in sync
         expected_nbr_entities_in_sync = (
