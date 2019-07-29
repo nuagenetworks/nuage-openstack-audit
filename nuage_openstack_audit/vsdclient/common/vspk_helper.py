@@ -86,11 +86,12 @@ class VspkHelper(object):
             LOG.debug('Started vspk session')
 
         # Store default enterprise
-        self.default_enterprise = self.session.user.enterprises.get(
-            filter='name is "{}"'.format(vsd_credentials.enterprise))[0]
-        if not self.default_enterprise:
+        default_enterprise = self.session.user.enterprises.get(
+            filter='name is "{}"'.format(vsd_credentials.enterprise))
+        if not default_enterprise:
             raise EnvironmentError('Default enterprise %s '
                                    'not found' % vsd_credentials.enterprise)
+        self.default_enterprise = default_enterprise[0]
         return self
 
     def get_default_enterprise(self):

@@ -40,6 +40,8 @@ class Main(object):
     Nuage OpenStack Audit is auditing networking resources between
     OpenStack neutron and the Nuage Networks VCS platform.'''
 
+    developer_modus = False
+
     def __init__(self, args=None, os_credentials=None,
                  vsd_credentials=None, cms_id=None):
 
@@ -68,8 +70,8 @@ class Main(object):
                                 default=None)
             args = parser.parse_args()
 
-        self.developer_modus = self.check_developer_modus()
-        self.debug = args.debug or self.developer_modus
+        Main.developer_modus = self.check_developer_modus()
+        self.debug = args.debug or Main.developer_modus
         self.verbose = args.verbose
         self.extreme_verbose = (
             (hasattr(args, 'extreme_verbose') and
@@ -99,7 +101,7 @@ class Main(object):
 
         USER.h1('Authenticating with Nuage VSD')
         self.vsd_credentials.report(DEBUG)
-        self.vsd = self.get_vsd_client(self.cms_id, vsd_credentials)
+        self.vsd = self.get_vsd_client(self.cms_id, self.vsd_credentials)
 
     def init_logger(self, initiating_time):
         from nuage_openstack_audit.utils.logger import get_logger
@@ -279,24 +281,18 @@ class Main(object):
 
 
 def main():
-    audit_main = None
     try:
-        audit_main = Main()
-        audit_report, _ = audit_main.run()
+        audit_report, _ = Main().run()
         if not audit_report:
-            return 0
+            return 0   # no discrepancies found
 
     except Exception as e:
-        if audit_main and audit_main.developer_modus:
+        if Main.developer_modus:
             Utils.report_traceback(ERROR)
         else:
             ERROR.h0('ERROR: %s', e)
 
-    # set exit code to 1 or error or when discrepancies found
-    # -> allows for shell commands like:
-    # $ nuage-openstack-audit all >/dev/null
-    # $ if [[($? == 0)]]; then echo "OK"; else echo "NOK"; fi
-
+    # set exit code to 1 on error or when discrepancies found
     return 1
 
 
