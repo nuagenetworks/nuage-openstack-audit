@@ -63,7 +63,7 @@ Use
 
       $ nuage-openstack-audit --help
 
-        usage: nuage-openstack-audit [-h] [-v] [-d] [-o REPORT]
+        usage: nuage-openstack-audit [-h] [-v] [-d] [-o REPORT] [-p PROJECT]
                                      {fwaas,security_group,all}
 
         Nuage OpenStack Audit is auditing networking resources between OpenStack
@@ -79,28 +79,42 @@ Use
           -d, --debug           log with debug level
           -o REPORT, --report REPORT
                                 specify the report file
+          -p PROJECT, --project PROJECT
+                                Project ID of the project to be audited. Only
+                                resources of this project will be audited. This
+                                parameter is optional.
 
 5. Run audit:
 
-    The following three use cases are supported:
+   The following three use cases are supported:
 
-    5.1. audit only FWaaS entities
+   * audit only FWaaS entities
 
-       .. code-block:: bash
+     .. code-block:: bash
 
-          $ nuage-openstack-audit fwaas
+        $ nuage-openstack-audit fwaas
 
-    5.2. audit only security group entities
+   * audit only security group entities
 
-       .. code-block:: bash
+     .. code-block:: bash
 
-          $ nuage-openstack-audit security_group
+        $ nuage-openstack-audit security_group
 
-    5.3. audit both FWaaS and security group entities
+   * audit both FWaaS and security group entities
 
-       .. code-block:: bash
+     .. code-block:: bash
 
-          $ nuage-openstack-audit all
+        $ nuage-openstack-audit all
+
+   * Audit only the resources for a specific project using the --project
+     <project-id> argument, where project-id is the ID of the project
+     to be audited. Auditing a specific project requires the executing user
+     to be an admin with access to the audited project. E.g.:
+
+      .. code-block:: bash
+
+         $ nuage-openstack-audit all --project 6082963e62194580ab79bd596b6aeb6a
+
 
 
 6. Review the audit results. Any identified audit mismatch condition will be

@@ -66,7 +66,7 @@ class Main(object):
                                 help='Project ID of the project to be audited.'
                                      ' Only resources of this project '
                                      'will be audited. '
-                                     'This parameter is optional',
+                                     'This parameter is optional.',
                                 default=None)
             args = parser.parse_args()
 
