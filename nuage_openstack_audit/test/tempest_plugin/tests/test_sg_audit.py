@@ -11,6 +11,7 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
 from collections import Counter
 
 # system under test
@@ -32,7 +33,6 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
 from nuage_openstack_audit.utils.logger import Reporter
 
-
 WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
@@ -40,6 +40,8 @@ INFO = Reporter('INFO')
 
 class BaseTestCase(object):
     """Wrapper around the base to avoid it being executed standalone"""
+
+    PG_ALLOW_ALL = 'PG_ALLOW_ALL'
 
     class SgAuditTestBase(TestBase):
         """General integration tests
@@ -67,10 +69,14 @@ class BaseTestCase(object):
         @classmethod
         def setUpClass(cls):
             cls.system_under_test = SystemUnderTest(
-                args=MainArgs('security_group'),
+                args=MainArgs('security_group',
+                              developer_modus=cls.
+                              DEVELOPER_MODUS_TEST_EXECUTION),
                 os_credentials=OS_CREDENTIALS,
                 vsd_credentials=VSD_CREDENTIALS,
                 cms_id=CMS_ID)
+
+            USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
             # VSD
             cls.vsd = VSDTestHelper()
@@ -99,14 +105,14 @@ class BaseTestCase(object):
             self.assert_audit_report_length(1, audit_report)
             discrepancy = audit_report[0]
             self.assertEqual('A Neutron port with port security disabled '
-                             'exists but there is no policy group for less '
-                             'security in its domain.',
+                             'exists but there is no PG_ALLOW_ALL in its '
+                             'domain.',
                              discrepancy['discrepancy_details'])
             self.assertEqual(self.port_no_sg['id'],
                              discrepancy['neutron_entity'])
             self.assertEqual(discrepancy['discrepancy_type'],
                              'ORPHAN_NEUTRON_ENTITY')
-            self.assertEqual(discrepancy['entity_type'], 'port')
+            self.assertEqual(discrepancy['entity_type'], 'Port')
             domain_getter = (
                 self.vsd.vspk_helper.get_default_enterprise().domains
                 if self.router
@@ -142,15 +148,15 @@ class BaseTestCase(object):
             self.assert_audit_report_length(1, audit_report)
             discrepancy = audit_report[0]
 
-            self.assertEqual('Policygroup for less security exists in VSD but '
+            self.assertEqual('PG_ALLOW_ALL policygroup exists in VSD but '
                              'there are no neutron ports with port security '
                              'disabled', discrepancy['discrepancy_details'])
             self.assertEqual(discrepancy['discrepancy_type'],
                              'ORPHAN_VSD_ENTITY')
-            self.assertEqual(discrepancy['entity_type'], 'Policygroup')
+            self.assertEqual(discrepancy['entity_type'], 'Policy Group')
             self.assertIsNone(discrepancy['neutron_entity'])
 
-            # Check vsd entity, should be the PG_FOR_LESS_SECURITY
+            # Check vsd entity, should be PG_ALLOW_ALL
             domain_getter = (
                 self.vsd.vspk_helper.get_default_enterprise().domains
                 if self.router
@@ -160,11 +166,12 @@ class BaseTestCase(object):
             domain_filter = (self.vsd.vspk_helper
                              .get_external_id_filter(domain_os_id))
             domain = (domain_getter.get_first(filter=domain_filter))
-            pg_for_less = [pg.id for pg in
-                           self.vsd.get_policy_groups(
-                               domain,
-                               "name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
-            self.assertIn(discrepancy['vsd_entity'], pg_for_less)
+            pg_allow_all = [pg.id for pg in
+                            self.vsd.get_policy_groups(
+                                domain,
+                                "name BEGINSWITH '{}'".format(
+                                    BaseTestCase.PG_ALLOW_ALL))]
+            self.assertIn(discrepancy['vsd_entity'], pg_allow_all)
 
             # Revert database change
             self.topology.disable_port_security_in_db(
@@ -218,13 +225,10 @@ class BaseTestCase(object):
             self.port_port_security_disabled = self.topology.create_port(
                 self.network, port_security_enabled=False,
                 name='port-security-disabled')
-
             self.expected_in_sync.update({
-                'ingress_acl_entry_templates (PG_FOR_LESS)':
-                    2 * self.topology.counter['ports_security_disabled'],
-                'egress_acl_entry_templates (PG_FOR_LESS)':
-                    2 * self.topology.counter['ports_security_disabled'],
-                'vports (PG_FOR_LESS)':
+                'ingress_acl_entry_templates (PG_ALLOW_ALL)': 2,
+                'egress_acl_entry_templates (PG_ALLOW_ALL)': 2,
+                'vports (PG_ALLOW_ALL)':
                     self.topology.counter['ports_security_disabled']
             })
 
@@ -254,7 +258,7 @@ class BaseTestCase(object):
                 discrepancy = audit_report[i]
                 self.assertEqual('ORPHAN_NEUTRON_ENTITY',
                                  discrepancy['discrepancy_type'])
-                self.assertEqual('Security Group port',
+                self.assertEqual('Security Group Port',
                                  discrepancy['entity_type'])
                 self.assertEqual(self.port['id'],
                                  discrepancy['neutron_entity'])
@@ -371,9 +375,6 @@ class BaseTestCase(object):
 class SgAuditTestL2(BaseTestCase.SgAuditTestBase):
     """Tests with an L2 setup"""
 
-    def __init__(self, *args, **kwargs):
-        super(SgAuditTestL2, self).__init__(*args, **kwargs)
-
     def setUp(self):
         super(SgAuditTestL2, self).setUp()
 
@@ -412,9 +413,6 @@ class SgAuditTestL2(BaseTestCase.SgAuditTestBase):
 class SgAuditTestL3(BaseTestCase.SgAuditTestBase):
     """Tests with an L3 setup"""
 
-    def __init__(self, *args, **kwargs):
-        super(SgAuditTestL3, self).__init__(*args, **kwargs)
-
     def setUp(self):
         super(SgAuditTestL3, self).setUp()
 
@@ -434,8 +432,8 @@ class SgAuditTestL3(BaseTestCase.SgAuditTestBase):
             network_id=self.network['id'],
             ip_version=4,
             cidr='10.0.0.0/24')
-        self.topology.create_router_interface(router_id=self.router['id'],
-                                              subnet_id=self.subnet['id'])
+        self.topology.create_router_interface(self.router['id'],
+                                              self.subnet['id'])
         self.port = self.topology.create_port(
             self.network, security_groups=[self.sg['id']],
             name='normal_port1')
@@ -456,9 +454,6 @@ class SgAuditTestL3(BaseTestCase.SgAuditTestBase):
 
 class SgAuditTestManyToMany(BaseTestCase.SgAuditTestBase):
     """Sg attached to multiple ports and port attached to multiple sgs"""
-
-    def __init__(self, *args, **kwargs):
-        super(SgAuditTestManyToMany, self).__init__(*args, **kwargs)
 
     def setUp(self):
         super(SgAuditTestManyToMany, self).setUp()
@@ -530,7 +525,8 @@ class NoDiscrepancies(TestBase):
     @classmethod
     def setUpClass(cls):
         cls.system_under_test = SystemUnderTest(
-            args=MainArgs('security_group'),
+            args=MainArgs('security_group',
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
@@ -538,13 +534,14 @@ class NoDiscrepancies(TestBase):
         cls.topology = NeutronTestHelper()
         cls.topology.authenticate()
 
-    def test_domain_dependent_pg_for_less(self):
+    def test_domain_dependent_pg_allow_all(self):
         network = self.topology.create_network(name='test-network')
         subnet = self.topology.create_subnet_l2(
             network_id=network['id'],
             ip_version=4,
             cidr='10.0.0.0/24')
-        # Create port that will end up in PG_FOR_LESS_SECURITY
+
+        # Create port that will end up in PG_ALLOW_ALL
         self.topology.create_port(
             network, port_security_enabled=False, name='port_no_security')
         router = self.topology.create_router(name='test-router')
@@ -553,16 +550,16 @@ class NoDiscrepancies(TestBase):
         self.topology.create_router_interface(
             router_id=router['id'], subnet_id=subnet['id'])
 
-        # Create a ports which will end up in a different PG_FOR_LESS_SECURITY
+        # Create a ports which will end up in the same PG_ALLOW_ALL
         self.topology.create_port(
             network, port_security_enabled=False, name='port_no_security')
 
         # Expect no discrepancies
-        # Two PG_FOR_LESS_SECURITY, one for the old vPort, one for the new
+        # One PG_ALLOW_ALL for the old and new vPort
         expected_in_sync = Counter({
-            'ingress_acl_entry_templates (PG_FOR_LESS)': 4,
-            'egress_acl_entry_templates (PG_FOR_LESS)': 4,
-            'vports (PG_FOR_LESS)': 2
+            'ingress_acl_entry_templates (PG_ALLOW_ALL)': 2,
+            'egress_acl_entry_templates (PG_ALLOW_ALL)': 2,
+            'vports (PG_ALLOW_ALL)': 2
         })
         audit_report, observed_in_sync = self.system_under_test.audit_sg()
         self.assert_counter_equal(expected_in_sync, observed_in_sync)

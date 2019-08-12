@@ -89,7 +89,7 @@ function install_test_requirements {
 if [[ "$1" == "stack" ]]; then
     if [[ "$2" == "install" ]]; then
         echo_summary "Installing requirements "$AUDIT_TEMPEST_DIR
-        pip_install -r $AUDIT_TEMPEST_DIR/requirements.txt -e $AUDIT_TEMPEST_DIR
+        pip_install -r $AUDIT_TEMPEST_DIR/requirements.txt -c $REQUIREMENTS_DIR/upper-constraints.txt -e $AUDIT_TEMPEST_DIR
     elif [[ "$1" == "stack" && "$2" == "extra" ]]; then
         configure_tempest_nuage_audit
     elif [[ "$1" == "stack" && "$2" == "test-config" ]]; then

@@ -85,10 +85,10 @@ class Main(object):
 
         # retrieve credential info from environment variables
         self.cms_id = self.get_cms_id() if not cms_id else cms_id
-        self.os_credentials = (self.get_os_credentials()
-                               if not os_credentials else os_credentials)
-        self.vsd_credentials = (self.get_vsd_credentials()
-                                if not vsd_credentials else vsd_credentials)
+        self.os_credentials = (os_credentials if os_credentials
+                               else self.get_os_credentials())
+        self.vsd_credentials = (vsd_credentials if vsd_credentials
+                                else self.get_vsd_credentials())
 
         # init logging
         self.init_logger(self.initiating_time)
@@ -157,14 +157,13 @@ class Main(object):
             user_domain_id = Utils.get_env_var('OS_USER_DOMAIN_ID')
             user_domain_name = Utils.get_env_var('OS_USER_DOMAIN_NAME')
             if not user_domain_name and not user_domain_id:
-                Utils.env_error('OS_USER_DOMAIN_ID '
-                                'nor OS_USER_DOMAIN_NAME '
+                Utils.env_error('OS_USER_DOMAIN_ID nor OS_USER_DOMAIN_NAME '
                                 'is defined. Please set either of both.')
             project_domain_id = Utils.get_env_var('OS_PROJECT_DOMAIN_ID')
             project_domain_name = Utils.get_env_var('OS_PROJECT_DOMAIN_NAME')
             if not project_domain_name and not project_domain_id:
-                Utils.env_error('OS_PROJECT_DOMAIN_ID '
-                                'nor OS_PROJECT_DOMAIN_NAME '
+                Utils.env_error('OS_PROJECT_DOMAIN_ID nor '
+                                'OS_PROJECT_DOMAIN_NAME '
                                 'is defined. Please set either of both.')
         else:
             user_domain_id = user_domain_name = None

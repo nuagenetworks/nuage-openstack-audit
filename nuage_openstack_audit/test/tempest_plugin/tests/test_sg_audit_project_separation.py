@@ -17,10 +17,11 @@ import copy
 import random
 
 import mock
+
 # system under test
 from nuage_openstack_audit.main import Main as SystemUnderTest
 from nuage_openstack_audit.osclient.osclient import KeystoneClient
-from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
+from nuage_openstack_audit.osclient.osclient import NeutronClient  # for mock'n
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
@@ -42,16 +43,15 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
 
-
 WARN = Reporter('WARN')
 USER = Reporter('USER')
 INFO = Reporter('INFO')
 
 
-class TopologyProjectSeperation(NeutronTestHelper):
+class TopologyProjectSeparation(NeutronTestHelper):
 
     def __init__(self):
-        super(TopologyProjectSeperation, self).__init__()
+        super(TopologyProjectSeparation, self).__init__()
         self.keystone = KeystoneClient()
 
         # vsd entities
@@ -115,10 +115,11 @@ class TopologyProjectSeperation(NeutronTestHelper):
         self.authenticate()
 
         # Create two projects
+        # -- random indexes protect better against leftover of previous runs --
         self.project1 = self.keystone.client.projects.create(
-            'test-project1', 'default')
+            'test-sgproject' + str(self.rand_int()), 'default')
         self.project2 = self.keystone.client.projects.create(
-            'test-project2', 'default')
+            'test-sgproject' + str(self.rand_int()), 'default')
 
         # Double everything for each project
 
@@ -459,11 +460,11 @@ class TopologyProjectSeperation(NeutronTestHelper):
         self.hw_port_l2_2_project2 = self.create_port(
             self.networkl2_project2,
             **hw_port_args)
-        self.pg_for_less_active = True
+        self.pg_allow_all_active = True
         self.hardware_port = True
 
     def teardown(self):
-        super(TopologyProjectSeperation, self).teardown()
+        super(TopologyProjectSeparation, self).teardown()
 
         USER.report('=== Deleting VSD gateway resources ===')
         self.gw_port1_project1.delete()
@@ -476,11 +477,15 @@ class TopologyProjectSeperation(NeutronTestHelper):
         self.keystone.client.projects.delete(self.project2.id)
 
     def authenticate(self, credentials=None, db_access=False):
-        super(TopologyProjectSeperation, self).authenticate(credentials,
+        super(TopologyProjectSeparation, self).authenticate(credentials,
                                                             db_access)
         if not credentials:
             credentials = OS_CREDENTIALS
         self.keystone.authenticate(credentials)
+
+    @staticmethod
+    def rand_int(n=10000):
+        return random.randint(0, n - 1)
 
 
 class SgMockProjectSepTest(TestBase):
@@ -495,19 +500,22 @@ class SgMockProjectSepTest(TestBase):
         super(SgMockProjectSepTest, cls).setUpClass()
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
-        cls.topology = TopologyProjectSeperation()
+        cls.topology = TopologyProjectSeparation()
         cls.sut = SystemUnderTest(
-            args=MainArgs('security_group'),
+            args=MainArgs('security_group',
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
         cls.sut_project_1 = SystemUnderTest(
-            args=MainArgs('security_group', project=cls.topology.project1.id),
+            args=MainArgs('security_group', project=cls.topology.project1.id,
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
         cls.sut_project_2 = SystemUnderTest(
-            args=MainArgs('security_group', project=cls.topology.project2.id),
+            args=MainArgs('security_group', project=cls.topology.project2.id,
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
@@ -521,12 +529,12 @@ class SgMockProjectSepTest(TestBase):
 
     def get_default_expected_in_sync_counter(self):
         return Counter({
-            'ingress_acl_entry_templates (PG_FOR_LESS)':
+            'ingress_acl_entry_templates (PG_ALLOW_ALL)':
                 2 * self.topology.counter['domains']
-                if self.topology.pg_for_less_active else 0,
-            'egress_acl_entry_templates (PG_FOR_LESS)':
+                if self.topology.pg_allow_all_active else 0,
+            'egress_acl_entry_templates (PG_ALLOW_ALL)':
                 2 * self.topology.counter['domains']
-                if self.topology.pg_for_less_active else 0,
+                if self.topology.pg_allow_all_active else 0,
             'egress_acl_entry_templates':
                 (self.topology.counter['domains'] *
                  (self.topology.counter['sg_rules_ingress'] / 2)),
@@ -540,7 +548,7 @@ class SgMockProjectSepTest(TestBase):
                 (self.topology.counter['domains'] *
                  (self.topology.counter['sgs'] / 2)),
             'vports': self.topology.counter['ports_sg'],
-            'vports (PG_FOR_LESS)':
+            'vports (PG_ALLOW_ALL)':
                 self.topology.counter['ports_no_security'],
         })
 
@@ -599,7 +607,8 @@ class SgMockProjectSepTest(TestBase):
 
         keystone_client.roles.grant(role, user=user1, project=project1)
         sut_user1 = SystemUnderTest(
-            args=MainArgs('security_group', project=project1.id),
+            args=MainArgs('security_group', project=project1.id,
+                          developer_modus=self.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=user_os_credentials,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
@@ -617,7 +626,7 @@ class SgMockProjectSepTest(TestBase):
     def test_missing_policygroups(self, *_):
         """Audit on topology with missing policygroups
 
-        Only hardware block-all rule and PG_for_less are still audited,
+        Only hardware block-all rule and PG_allow_all are still audited,
         the latter will show discrepancies because of missing policygroups
         """
         if self.topology.is_dhcp_agent_enabled():
@@ -649,7 +658,7 @@ class SgMockProjectSepTest(TestBase):
         # Divided by two because only half of SG is for a domain as we have
         # two tenants.
         expected_discrepancies = Counter({
-            'ports_missing_pg_for_less':
+            'ports_missing_pg_allow_all':
                 self.topology.counter['ports_no_security'],
             'pgs_missing':
                 self.get_default_expected_in_sync_counter()['policygroups']
@@ -681,14 +690,14 @@ class SgMockProjectSepTest(TestBase):
             discrepancy['entity_type'] for discrepancy in audit_report1)
         discrepancy_types_cnt2 = Counter(
             discrepancy['entity_type'] for discrepancy in audit_report2)
-        self.assertEqual(expected_discrepancies['ports_missing_pg_for_less'],
-                         discrepancy_types_cnt['port'])
+        self.assertEqual(expected_discrepancies['ports_missing_pg_allow_all'],
+                         discrepancy_types_cnt['Port'])
         self.assertEqual(
-            expected_discrepancies['ports_missing_pg_for_less'] / 2,
-            discrepancy_types_cnt1['port'])
+            expected_discrepancies['ports_missing_pg_allow_all'] / 2,
+            discrepancy_types_cnt1['Port'])
         self.assertEqual(
-            expected_discrepancies['ports_missing_pg_for_less'] / 2,
-            discrepancy_types_cnt2['port'])
+            expected_discrepancies['ports_missing_pg_allow_all'] / 2,
+            discrepancy_types_cnt2['Port'])
         self.assertEqual(expected_discrepancies['pgs_missing'],
                          discrepancy_types_cnt['Security Group'])
         self.assertEqual(expected_discrepancies['pgs_missing'] / 2,
@@ -744,15 +753,15 @@ class SgMockProjectSepTest(TestBase):
 
         expected_in_sync = self.get_default_expected_in_sync_counter()
         expected_in_sync['vports'] -= 8
-        expected_in_sync['vports (PG_FOR_LESS)'] -= 4
+        expected_in_sync['vports (PG_ALLOW_ALL)'] -= 4
         self.assert_counter_equal(expected_in_sync, observed_in_sync)
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
         expected_in_sync['vports'] -= 4
-        expected_in_sync['vports (PG_FOR_LESS)'] -= 2
+        expected_in_sync['vports (PG_ALLOW_ALL)'] -= 2
         self.assert_counter_equal(expected_in_sync, observed_in_sync1)
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
         expected_in_sync['vports'] -= 4
-        expected_in_sync['vports (PG_FOR_LESS)'] -= 2
+        expected_in_sync['vports (PG_ALLOW_ALL)'] -= 2
         self.assert_counter_equal(expected_in_sync, observed_in_sync2)
 
         removed_ports = SgMockProjectSepTest._removed_ports()
@@ -764,7 +773,7 @@ class SgMockProjectSepTest(TestBase):
         for discrepancy in audit_report:
             self.assert_equal('ORPHAN_NEUTRON_ENTITY',
                               discrepancy['discrepancy_type'])
-            self.assert_equal('Security Group port',
+            self.assert_equal('Security Group Port',
                               discrepancy['entity_type'])
             self.assertIn(discrepancy['neutron_entity'], removed_ports)
             self.assertIsNone(discrepancy['vsd_entity'])
@@ -772,7 +781,7 @@ class SgMockProjectSepTest(TestBase):
         for discrepancy in audit_report1:
             self.assert_equal('ORPHAN_NEUTRON_ENTITY',
                               discrepancy['discrepancy_type'])
-            self.assert_equal('Security Group port',
+            self.assert_equal('Security Group Port',
                               discrepancy['entity_type'])
             self.assertIn(discrepancy['neutron_entity'], removed_ports)
             self.assertIsNone(discrepancy['vsd_entity'])
@@ -780,7 +789,7 @@ class SgMockProjectSepTest(TestBase):
         for discrepancy in audit_report2:
             self.assert_equal('ORPHAN_NEUTRON_ENTITY',
                               discrepancy['discrepancy_type'])
-            self.assert_equal('Security Group port',
+            self.assert_equal('Security Group Port',
                               discrepancy['entity_type'])
             self.assertIn(discrepancy['neutron_entity'], removed_ports)
             self.assertIsNone(discrepancy['vsd_entity'])
@@ -804,16 +813,16 @@ class SgMockProjectSepTest(TestBase):
         audit_report2, observed_in_sync1 = self.sut_project_2.audit_sg()
 
         expected_in_sync = self.get_default_expected_in_sync_counter()
-        expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
-        expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'] = 0
+        expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
+        expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
         expected_in_sync['egress_acl_entry_templates'] = 0
         expected_in_sync['ingress_acl_entry_templates'] = 0
         expected_in_sync['egress_acl_entry_templates (hardware)'] = 0
         self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
-        expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
-        expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'] = 0
+        expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
+        expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
         expected_in_sync['egress_acl_entry_templates'] = 0
         expected_in_sync['ingress_acl_entry_templates'] = 0
         expected_in_sync['egress_acl_entry_templates (hardware)'] = 0
@@ -823,8 +832,8 @@ class SgMockProjectSepTest(TestBase):
 
         expected_in_sync = self.get_default_expected_in_sync_counter()
         expected_discrepancies = (
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] +
-            expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'] +
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] +
+            expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'] +
             expected_in_sync['egress_acl_entry_templates'] +
             expected_in_sync['ingress_acl_entry_templates'] +
             expected_in_sync['egress_acl_entry_templates (hardware)'])
@@ -832,8 +841,8 @@ class SgMockProjectSepTest(TestBase):
 
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
         expected_discrepancies = (
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] +
-            expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'] +
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] +
+            expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'] +
             expected_in_sync['egress_acl_entry_templates'] +
             expected_in_sync['ingress_acl_entry_templates'] +
             expected_in_sync['egress_acl_entry_templates (hardware)'])
@@ -842,8 +851,8 @@ class SgMockProjectSepTest(TestBase):
 
         expected_in_sync = self.get_default_expected_in_sync_counter()
         expected_mismatches = (
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] +
-            expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'])
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] +
+            expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'])
         expected_orphans = (
             expected_in_sync['egress_acl_entry_templates'] +
             expected_in_sync['ingress_acl_entry_templates'] +
@@ -866,8 +875,8 @@ class SgMockProjectSepTest(TestBase):
 
         expected_in_sync = self.get_per_project_expected_in_sync_counter()
         expected_mismatches = (
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] +
-            expected_in_sync['egress_acl_entry_templates (PG_FOR_LESS)'])
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] +
+            expected_in_sync['egress_acl_entry_templates (PG_ALLOW_ALL)'])
         expected_orphans = (
             expected_in_sync['egress_acl_entry_templates'] +
             expected_in_sync['ingress_acl_entry_templates'] +
@@ -920,7 +929,7 @@ class SgMockProjectSepTest(TestBase):
         audit_report1, observed_in_sync1 = self.sut_project_1.audit_sg()
         audit_report2, observed_in_sync2 = self.sut_project_2.audit_sg()
 
-        # Expected: pg for less + port with no port security
+        # Expected: PG ALLOW ALL + port with no port security
         expected_in_sync = self.get_default_expected_in_sync_counter()
         expected_in_sync.pop('egress_acl_entry_templates')
         expected_in_sync.pop('ingress_acl_entry_templates')
@@ -1010,23 +1019,23 @@ class SgMockProjectSepTest(TestBase):
                               discrepancy['discrepancy_type'])
 
     @header()
-    def test_pg_for_less_too_many_acl_entries(self):
-        """Audit with duplicated pg for less entries"""
+    def test_pg_allow_all_too_many_acl_entries(self):
+        """Audit with duplicated pg-allow-all entries"""
         if self.topology.is_dhcp_agent_enabled():
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [
+        pg_allow_all_ids = [
             pg.id for domain in self.topology.vsd.get_domains()
             for pg in self.topology.vsd.get_policy_groups(
-                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
+                domain, vspk_filter="name BEGINSWITH 'PG_ALLOW_ALL'")]
 
         def mock_get_ingress_acl_entries(*args, **kwargs):
             original_entries = list(original_fetcher(*args, **kwargs))
-            pg_for_less_entries = [entry for entry in original_entries
-                                   if entry.location_id in pg_for_less_ids]
-            return original_entries + pg_for_less_entries
+            pg_allow_all = [entry for entry in original_entries
+                            if entry.location_id in pg_allow_all_ids]
+            return original_entries + pg_allow_all
 
         with mock.patch.object(
                 VsdClient, 'get_ingress_acl_entries',
@@ -1039,7 +1048,7 @@ class SgMockProjectSepTest(TestBase):
             # discrepancy validation
             # there are 2 orphans per domain, an IPv4 and IPv6 ingress rule
             expected_discrepancies = self.topology.counter['domains'] * 2 \
-                if self.topology.pg_for_less_active else 0
+                if self.topology.pg_allow_all_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             expected_discrepancies /= 2
@@ -1066,21 +1075,21 @@ class SgMockProjectSepTest(TestBase):
             self.assert_counter_equal(expected_in_sync, observed_in_sync2)
 
     @header()
-    def test_pg_for_less_invalid_rules_action(self):
+    def test_pg_allow_all_invalid_rules_action(self):
         if self.topology.is_dhcp_agent_enabled():
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [
+        pg_allow_all_ids = [
             pg.id for domain in self.topology.vsd.get_domains()
             for pg in self.topology.vsd.get_policy_groups(
-                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
+                domain, vspk_filter="name BEGINSWITH 'PG_ALLOW_ALL'")]
 
         def mock_get_ingress_acl_entries_bad_action(*args, **kwargs):
             for entry in original_fetcher(*args, **kwargs):
-                if entry.location_id in pg_for_less_ids:
+                if entry.location_id in pg_allow_all_ids:
                     entry.action = ''  # Used to be FORWARD
                 yield entry
 
@@ -1095,7 +1104,7 @@ class SgMockProjectSepTest(TestBase):
             # discrepancy validation
             # there are 2 mismatches per domain, an IPv4 and IPv6 ingress rule
             expected_discrepancies = self.topology.counter['domains'] * 2 \
-                if self.topology.pg_for_less_active else 0
+                if self.topology.pg_allow_all_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             expected_discrepancies /= 2
@@ -1109,30 +1118,30 @@ class SgMockProjectSepTest(TestBase):
 
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
             self.assert_counter_equal(expected_in_sync, observed_in_sync)
             expected_in_sync = self.get_per_project_expected_in_sync_counter()
 
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
             self.assert_counter_equal(expected_in_sync, observed_in_sync1)
             self.assert_counter_equal(expected_in_sync, observed_in_sync2)
 
     @header()
-    def test_pg_for_less_invalid_rules_ethertype(self):
+    def test_pg_allow_all_invalid_rules_ethertype(self):
         if self.topology.is_dhcp_agent_enabled():
             self.skipTest("Running this test with DHCP agent enabled is not "
                           "supported")
 
         original_fetcher = VsdClient.get_ingress_acl_entries
 
-        pg_for_less_ids = [
+        pg_allow_all_ids = [
             pg.id for domain in self.topology.vsd.get_domains()
             for pg in self.topology.vsd.get_policy_groups(
-                domain, vspk_filter="name BEGINSWITH 'PG_FOR_LESS_SECURITY'")]
+                domain, vspk_filter="name BEGINSWITH 'PG_ALLOW_ALL'")]
 
         def mock_get_ingress_acl_entries_bad_ether_type(*args, **kwargs):
             for entry in original_fetcher(*args, **kwargs):
-                if entry.location_id in pg_for_less_ids:
+                if entry.location_id in pg_allow_all_ids:
                     entry.ether_type = ''  # Used to represent IPv4/IPv6
                 yield entry
 
@@ -1148,7 +1157,7 @@ class SgMockProjectSepTest(TestBase):
             # there are 4 mismatches per domain, invalid rule for IPv4 and IPv6
             # and detection of missing entry for IPv4 and IPv6
             expected_discrepancies = self.topology.counter['domains'] * 4 \
-                if self.topology.pg_for_less_active else 0
+                if self.topology.pg_allow_all_active else 0
             self.assert_audit_report_length(expected_discrepancies,
                                             audit_report)
             expected_discrepancies /= 2
@@ -1163,11 +1172,11 @@ class SgMockProjectSepTest(TestBase):
 
             # in sync validation
             expected_in_sync = self.get_default_expected_in_sync_counter()
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
             self.assert_counter_equal(expected_in_sync, observed_in_sync)
 
             expected_in_sync = self.get_per_project_expected_in_sync_counter()
-            expected_in_sync['ingress_acl_entry_templates (PG_FOR_LESS)'] = 0
+            expected_in_sync['ingress_acl_entry_templates (PG_ALLOW_ALL)'] = 0
             self.assert_counter_equal(expected_in_sync, observed_in_sync1)
             self.assert_counter_equal(expected_in_sync, observed_in_sync2)
 

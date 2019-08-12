@@ -36,6 +36,7 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
 from nuage_openstack_audit.utils.logger import Reporter
 
 INFO = Reporter('INFO')
+USER = Reporter('USER')
 
 
 def timeit(method):
@@ -61,7 +62,8 @@ class ScaleRouterPerfTest(TestBase):
     @classmethod
     def setUpClass(cls):
         cls.system_under_test = SystemUnderTest(
-            args=MainArgs('security_group'),
+            args=MainArgs('security_group',
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
@@ -98,6 +100,9 @@ class ScaleRouterPerfTest(TestBase):
 
     @classmethod
     def tearDownClass(cls):
+        super(ScaleRouterPerfTest, cls).tearDownClass()
+
+        USER.report('\n===== End of tests (%s) =====', cls.__name__)
         cls.topology.teardown()
 
     def run_audit(self):
@@ -165,10 +170,13 @@ class ScaleSGPerfTest(TestBase):
     @classmethod
     def setUpClass(cls):
         cls.system_under_test = SystemUnderTest(
-            args=MainArgs('security_group'),
+            args=MainArgs('security_group',
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID)
+
+        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         # Neutron
         cls.topology = NeutronTestHelper()
@@ -197,6 +205,9 @@ class ScaleSGPerfTest(TestBase):
 
     @classmethod
     def tearDownClass(cls):
+        super(ScaleSGPerfTest, cls).tearDownClass()
+
+        USER.report('\n===== End of tests (%s) =====', cls.__name__)
         cls.topology.teardown()
 
     def run_audit(self):

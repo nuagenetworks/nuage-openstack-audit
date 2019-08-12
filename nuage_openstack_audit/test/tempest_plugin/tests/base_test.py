@@ -13,6 +13,7 @@
 #    under the License.
 
 from collections import Counter
+import random
 
 import six
 import testtools
@@ -26,31 +27,33 @@ WARN = Reporter('WARN')
 
 class TestBase(testtools.TestCase):
 
+    DEVELOPER_MODUS_TEST_EXECUTION = False
+
     @staticmethod
-    def check_in(needle, haystack, message='Expected {} be in {}'):
+    def check_in(needle, haystack, message=''):
+        message = message or 'Expected {} be in {}'
         if needle not in haystack:
             Reporter('WARN').report(message.format(needle, haystack))
             return False
         else:
             return True
 
-    def assert_in(self, needle, haystack, message='Expected {} be in {}'):
+    def assert_in(self, needle, haystack, message=''):
         if not self.check_in(needle, haystack, message):
-            self.assertIn(needle, haystack, message)
+            self.assertIn(needle, haystack, message or 'Not present')
 
     @staticmethod
-    def check_equal(expected, observed,
-                    message='Expected {}, got {}'):
+    def check_equal(expected, observed, message=''):
+        message = message or 'Expected {}, got {}'
         if expected != observed:
             Reporter('WARN').report(message.format(expected, observed))
             return False
         else:
             return True
 
-    def assert_equal(self, expected, observed,
-                     message='Expected {}, got {}'):
+    def assert_equal(self, expected, observed, message=''):
         if not self.check_equal(expected, observed, message):
-            self.assertEqual(expected, observed, message)
+            self.assertEqual(expected, observed, message or 'Mismatch')
 
     def assert_audit_report_length(self, expected_length, audit_report):
         actual_length = len(audit_report)
@@ -80,3 +83,7 @@ class TestBase(testtools.TestCase):
     @staticmethod
     def is_extension_fwaas_enabled():
         return test.is_extension_enabled('fwaas', 'network')
+
+    @staticmethod
+    def rand_int(n=10000):
+        return random.randint(0, n - 1)

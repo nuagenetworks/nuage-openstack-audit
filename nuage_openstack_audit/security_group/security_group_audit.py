@@ -22,8 +22,8 @@ import six
 from nuage_openstack_audit.audit import Audit
 from nuage_openstack_audit.security_group.modules.hardware \
     import HardwarePGAudit
-from nuage_openstack_audit.security_group.modules.pg_for_less \
-    import PGForLessAudit
+from nuage_openstack_audit.security_group.modules.pg_allow_all \
+    import PGAllowAllAudit
 from nuage_openstack_audit.security_group.security_group_matchers \
     import SecurityGroupPolicyGroupMatcher
 from nuage_openstack_audit.security_group.security_group_matchers \
@@ -45,7 +45,7 @@ AUTO_CREATE_PORT_OWNERS = ['network:router_interface',
                            'network:router_gateway', 'network:floatingip',
                            'nuage:vip', 'compute:ironic', 'network:dhcp:nuage']
 
-PG_FOR_LESS_SECURITY = 'PG_FOR_LESS_SECURITY'
+PG_ALLOW_ALL = 'PG_ALLOW_ALL'
 
 
 class SGPortsTuple(object):
@@ -242,16 +242,16 @@ class SecurityGroupAudit(Audit):
 
     @staticmethod
     def get_sg_ext_id(sg):
-        return ('hw:' + sg['id']
-                if sg['type'] == ACL_TEMPLATE_HARDWARE else sg['id'])
+        return ('hw:' + sg['id'] if sg['type'] == ACL_TEMPLATE_HARDWARE
+                else sg['id'])
 
     def audit_domain(self, domain, network_id, subnet_ids, is_l2):
         sg_to_ports = self._get_sg_id_to_sg_and_ports_mapping(subnet_ids)
         # Calculate PG -> vports dict
         # vports is a fetcher on policygroup
-        # filter out the defaultPG_ for SRIOV
-        _filter = "not(name BEGINSWITH 'defaultPG-' or name BEGINSWITH '{}')" \
-                  " and {}".format(PG_FOR_LESS_SECURITY, self.vspk_filter)
+        # filter out the PG_ALLOW_ALL
+        _filter = "NOT(name BEGINSWITH '{}') AND {}".format(
+            PG_ALLOW_ALL, self.vspk_filter)
         policygroups = list(self.vsd.get_policy_groups(
             domain, vspk_filter=_filter))
         policygroup_id_by_os_id = {self.strip_cms_id(pg.external_id): pg.id
@@ -262,7 +262,7 @@ class SecurityGroupAudit(Audit):
 
         # Compare security groups with policy groups
         security_groups = [sg for (sg, _) in sg_to_ports.values()
-                           if not sg['id'].startswith(PG_FOR_LESS_SECURITY)]
+                           if not sg['id'].startswith(PG_ALLOW_ALL)]
 
         def on_in_sync(policygroup, securitygroup):
             self.audit_security_group_ports(sg_to_ports, policygroup,
@@ -291,21 +291,67 @@ class SecurityGroupAudit(Audit):
             self.audit_report += my_report
             self.cnt_in_sync += my_counter
 
-        # audit PG_FOR_LESS_SECURITY if needed
+        # audit PG_ALLOW_ALL if needed
         for template_type in [ACL_TEMPLATE_HARDWARE, ACL_TEMPLATE_SOFTWARE]:
-            _, ports = (sg_to_ports.get('{}_{}'.format(PG_FOR_LESS_SECURITY,
+            is_hw = template_type == ACL_TEMPLATE_HARDWARE
+            _, ports = (sg_to_ports.get('{}_{}'.format(PG_ALLOW_ALL,
                                                        template_type)) or
-                        (None, None))
+                        (None, []))
             vspk_filter = ("name BEGINSWITH '{}' and type IS '{}' and {}"
-                           .format(PG_FOR_LESS_SECURITY, template_type,
+                           .format(PG_ALLOW_ALL, template_type,
                                    self.vspk_filter))
-            policygroups = list(self.vsd.get_policy_groups(domain,
-                                                           vspk_filter))
-            audit_report, cnt_in_sync = PGForLessAudit(
-                self.neutron, self.vsd,
-                self.cms_id, self.ignore_vsd_orphans).audit(domain,
-                                                            policygroups,
-                                                            ports)
+            pgs_allow_all = list(self.vsd.get_policy_groups(domain,
+                                                            vspk_filter))
+            cnt_in_sync = Counter()
+            audit_report = []
+            if len(pgs_allow_all) == 0:
+                for port in ports:
+                    audit_report.append({
+                        'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
+                        'entity_type': 'Port',
+                        'neutron_entity': port['id'],
+                        'vsd_entity': domain.id,
+                        'discrepancy_details': 'A Neutron port with '
+                                               'port security disabled exists '
+                                               'but there is no PG_ALLOW_ALL '
+                                               'in its domain.'})
+            elif len(pgs_allow_all) > 1:
+                if self.ignore_vsd_orphans:
+                    continue
+                first = True
+                for pg in pgs_allow_all:
+                    if first:
+                        first = False
+                        continue
+                    # else:
+                    audit_report.append({
+                        'discrepancy_type': 'ORPHAN_VSD_ENTITY',
+                        'entity_type': 'Policy Group',
+                        'neutron_entity': None,
+                        'vsd_entity': pg.id,
+                        'discrepancy_details':
+                            'Multiple {} PG_ALLOW_ALL policygroups are found '
+                            'in VSD domain {}'.format(
+                                'HW' if is_hw else 'SW', domain.id)})
+            elif not ports:
+                if self.ignore_vsd_orphans:
+                    continue
+                pg_allow_all = pgs_allow_all[0]
+                self.audit_report.append({
+                    'discrepancy_type': 'ORPHAN_VSD_ENTITY',
+                    'entity_type': 'Policy Group',
+                    'neutron_entity': None,
+                    'vsd_entity': pg_allow_all.id,
+                    'discrepancy_details':
+                        'PG_ALLOW_ALL policygroup exists in VSD but there are '
+                        'no neutron ports with port security disabled'})
+            else:
+                pg_allow_all = pgs_allow_all[0]
+                audit_report, cnt_in_sync = PGAllowAllAudit(
+                    self.neutron, self.vsd,
+                    self.cms_id, self.ignore_vsd_orphans).audit(domain,
+                                                                pg_allow_all,
+                                                                ports)
             self.audit_report += audit_report
             self.cnt_in_sync += cnt_in_sync
 
@@ -356,12 +402,12 @@ class SecurityGroupAudit(Audit):
             # Handle normal security groups
             for sg_id in port['security_groups']:
                 result[sg_id].ports.append(port)
-            # Handle the case where PG_FOR_LESS_SECURITY is used
+            # Handle the case where PG_ALLOW_ALL is used
             if not port['port_security_enabled']:
                 sg_type = (ACL_TEMPLATE_HARDWARE
                            if self.is_bound_baremetal_port(port)
                            else ACL_TEMPLATE_SOFTWARE)
-                sg_id = PG_FOR_LESS_SECURITY + '_' + sg_type
+                sg_id = PG_ALLOW_ALL + '_' + sg_type
                 # Here we directly create the sg_group dictionary as it is
                 # artificial anyway
                 if result[sg_id].security_group is None:
@@ -371,7 +417,7 @@ class SecurityGroupAudit(Audit):
 
         # fetch and add the security group objects
         for sg_id, sg_ports_tuple in six.iteritems(result):
-            if sg_id.startswith(PG_FOR_LESS_SECURITY):
+            if sg_id.startswith(PG_ALLOW_ALL):
                 continue
             sg = self.neutron.get_security_group(sg_id)
             sg['type'] = (ACL_TEMPLATE_HARDWARE
@@ -431,12 +477,12 @@ class SecurityGroupAudit(Audit):
         self.audit_report = []
 
         # cnt_in_sync counts VSD entities that are in valid, elements are:
-        #  - Number of acl entry templates related to PG_FOR_LESS
-        #     'ingress_acl_entry_templates (PG_FOR_LESS)'
-        #     'egress_acl_entry_templates (PG_FOR_LESS)'
+        #  - Number of acl entry templates related to PG_ALLOW_ALL
+        #     'ingress_acl_entry_templates (PG_ALLOW_ALL)'
+        #     'egress_acl_entry_templates (PG_ALLOW_ALL)'
         #
-        #  - Number of vports in PG_FOR_LESS
-        #     'vports (PG_FOR_LESS)'
+        #  - Number of vports in PG_ALLOW_ALL
+        #     'vports (PG_ALLOW_ALL)'
         #
         #  - Number of acl entries related to default hardware block-all acl
         #     'egress_acl_entry_templates (hardware)'

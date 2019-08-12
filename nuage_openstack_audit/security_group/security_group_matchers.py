@@ -32,8 +32,8 @@ class SecurityGroupPolicyGroupMatcher(Matcher):
 
     @staticmethod
     def _map_name(sg):
-        return (sg['id'] + '_HARDWARE'
-                if sg['type'] == constants.HARDWARE else sg['id'])
+        return (sg['id'] + '_HARDWARE' if sg['type'] == constants.HARDWARE
+                else sg['id'])
 
     @staticmethod
     def _map_description(sg):
@@ -46,7 +46,7 @@ class SecurityGroupPolicyGroupMatcher(Matcher):
 
 class SecurityGroupPortsPolicyGroupVportsMatcher(Matcher):
     def entity_name(self):
-        return 'Security Group port'
+        return 'Security Group Port'
 
     def get_mapper(self):
         # Only verification is external id

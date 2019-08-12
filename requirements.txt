@@ -12,5 +12,6 @@ six
 osc_lib
 python-keystoneclient
 python-neutronclient
+more-itertools==5  # For some reason, pip will try to install a python3 package for more-itertools on CI
 neutron-lib
 vspk

@@ -22,7 +22,7 @@ import testtools
 # system under test
 from nuage_openstack_audit.main import Main as SystemUnderTest
 from nuage_openstack_audit.osclient.osclient import KeystoneClient
-from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
+from nuage_openstack_audit.osclient.osclient import NeutronClient  # for mock'n
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
@@ -42,16 +42,13 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
 
-# run me using:
-# python -m testtools.run
-#     nuage_openstack_audit/test/fwaas_audit_test_project_separation.py
-
 # *****************************************************************************
 #  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
 #            SETUP WITH AUDIT ENV VARIABLES CORRECTLY SET.
 # *****************************************************************************
 
 USER = Reporter('USER')
+WARN = Reporter('WARN')
 
 
 def get_nbr_firewalls_under_test():
@@ -82,6 +79,11 @@ class FirewallAuditProjectSeparationBase(TestBase):
     def setUpClass(cls):
         super(FirewallAuditProjectSeparationBase, cls).setUpClass()
         if not cls.nbr_firewalls:
+            raise cls.skipException('Base class tests are skipped '
+                                    '(hint: add to blacklist).')
+
+        if Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
+            WARN.report('%s test setup is skipped!', cls.__name__)
             return  # done
 
         cls.routers = []
@@ -100,111 +102,110 @@ class FirewallAuditProjectSeparationBase(TestBase):
                                     cls.nbr_enabled_rules_per_fw)
         cls.nbr_fw_rules = cls.nbr_firewalls * cls.nbr_rules_per_fw
 
-        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
+        cls.neutron = NeutronTestHelper()
+        cls.neutron.authenticate(OS_CREDENTIALS)
+        cls.keystone = KeystoneClient()
+        cls.keystone.authenticate(OS_CREDENTIALS)
 
-        if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
-            cls.neutron = NeutronTestHelper()
-            cls.neutron.authenticate(OS_CREDENTIALS)
-            cls.keystone = KeystoneClient()
-            cls.keystone.authenticate(OS_CREDENTIALS)
-            USER.report('\n=== Creating Keystone Project1 and Project2 ===')
-            cls.project1 = cls.keystone.client.projects.create(
-                'test-project1-fw', 'default')
-            cls.project2 = cls.keystone.client.projects.create(
-                'test-project2-fw', 'default')
+        cls.project1 = cls.keystone.client.projects.create(
+            'test-fwproject' + str(cls.rand_int()), 'default')
+        cls.project2 = cls.keystone.client.projects.create(
+            'test-fwproject' + str(cls.rand_int()), 'default')
 
-            USER.report('\n=== Creating %d OpenStack firewalls ===',
-                        cls.nbr_firewalls)
-            for f in range(cls.nbr_firewalls / 2):
-                # create rules
-                fw_policy_rule_ids_project1 = []
-                fw_policy_rule_ids_project2 = []
-                admin_state_up = cls.admin_state_up()  # repeated query
-                print('Creating %d+1 OpenStack firewall rules for fw %s and %s'
-                      ' (admin %s)' % (cls.nbr_enabled_rules_per_fw, 2 * f,
-                                       2 * f + 1,
-                                       'up' if admin_state_up else 'down'))
-                for r in range(cls.nbr_enabled_rules_per_fw):
-                    rule = cls.neutron.create_firewall_rule(
-                        project_id=cls.project1.id)
-                    cls.fw_rules.append(rule)
-                    fw_policy_rule_ids_project1.append(rule['id'])
-                    rule = cls.neutron.create_firewall_rule(
-                        project_id=cls.project2.id)
-                    cls.fw_rules.append(rule)
-                    fw_policy_rule_ids_project2.append(rule['id'])
-
-                # + add 1 disabled rule
-                rule = cls.neutron.create_firewall_rule(
-                    enabled=False, project_id=cls.project1.id)
-                cls.fw_rules.append(rule)
-                fw_policy_rule_ids_project1.append(rule['id'])
-                rule = cls.neutron.create_firewall_rule(
-                    enabled=False, project_id=cls.project2.id)
-                cls.fw_rules.append(rule)
-                fw_policy_rule_ids_project2.append(rule['id'])
-
-                # create policy out of the rules
-                policy_project1 = cls.neutron.create_firewall_policy(
-                    'policy', fw_policy_rule_ids_project1,
-                    project_id=cls.project1.id)
-                cls.fw_policies.append(policy_project1)
-                policy_project2 = cls.neutron.create_firewall_policy(
-                    'policy', fw_policy_rule_ids_project2,
-                    project_id=cls.project2.id)
-                cls.fw_policies.append(policy_project2)
-
-                # create router and firewall
-                router_project1 = cls.neutron.create_router(
-                    'router-project1', project_id=cls.project1.id)
-                cls.routers.append(router_project1)
-                router_project2 = cls.neutron.create_router(
-                    'router-project2', project_id=cls.project2.id)
-                cls.routers.append(router_project2)
-                fw = cls.neutron.create_firewall(
-                    policy_project1, router_project1, admin_state_up,
-                    project_id=cls.project1.id)
-                cls.fws.append(fw)
-                fw = cls.neutron.create_firewall(
-                    policy_project2, router_project2, admin_state_up,
-                    project_id=cls.project2.id)
-                cls.fws.append(fw)
-                if admin_state_up:
-                    cls.nbr_firewalls_up += 2
-                else:
-                    cls.nbr_firewalls_down += 2
-
-        USER.report('\n=== Launching system under test ===')
         cls.sut = SystemUnderTest(
-            args=MainArgs('security_group'),
+            args=MainArgs('security_group',
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID
         )
         cls.sut_project_1 = SystemUnderTest(
-            args=MainArgs('fwaas', project=cls.project1.id),
+            args=MainArgs('fwaas', project=cls.project1.id,
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID
         )
         cls.sut_project_2 = SystemUnderTest(
-            args=MainArgs('fwaas', project=cls.project2.id),
+            args=MainArgs('fwaas', project=cls.project2.id,
+                          developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
             os_credentials=OS_CREDENTIALS,
             vsd_credentials=VSD_CREDENTIALS,
             cms_id=CMS_ID
         )
 
+        USER.report('\n===== Start of tests (%s) =====', cls.__name__)
+        USER.report('\n=== Creating %d OpenStack firewalls ===',
+                    cls.nbr_firewalls)
+        for f in range(cls.nbr_firewalls / 2):
+            # create rules
+            fw_policy_rule_ids_project1 = []
+            fw_policy_rule_ids_project2 = []
+            admin_state_up = cls.admin_state_up()  # repeated query
+            print('Creating %d+1 OpenStack firewall rules for fw %s and %s'
+                  ' (admin %s)' % (cls.nbr_enabled_rules_per_fw, 2 * f,
+                                   2 * f + 1,
+                                   'up' if admin_state_up else 'down'))
+            for r in range(cls.nbr_enabled_rules_per_fw):
+                rule = cls.neutron.create_firewall_rule(
+                    project_id=cls.project1.id)
+                cls.fw_rules.append(rule)
+                fw_policy_rule_ids_project1.append(rule['id'])
+                rule = cls.neutron.create_firewall_rule(
+                    project_id=cls.project2.id)
+                cls.fw_rules.append(rule)
+                fw_policy_rule_ids_project2.append(rule['id'])
+
+            # + add 1 disabled rule
+            rule = cls.neutron.create_firewall_rule(
+                enabled=False, project_id=cls.project1.id)
+            cls.fw_rules.append(rule)
+            fw_policy_rule_ids_project1.append(rule['id'])
+            rule = cls.neutron.create_firewall_rule(
+                enabled=False, project_id=cls.project2.id)
+            cls.fw_rules.append(rule)
+            fw_policy_rule_ids_project2.append(rule['id'])
+
+            # create policy out of the rules
+            policy_project1 = cls.neutron.create_firewall_policy(
+                'policy', fw_policy_rule_ids_project1,
+                project_id=cls.project1.id)
+            cls.fw_policies.append(policy_project1)
+            policy_project2 = cls.neutron.create_firewall_policy(
+                'policy', fw_policy_rule_ids_project2,
+                project_id=cls.project2.id)
+            cls.fw_policies.append(policy_project2)
+
+            # create router and firewall
+            router_project1 = cls.neutron.create_router(
+                'router-project1', project_id=cls.project1.id)
+            cls.routers.append(router_project1)
+            router_project2 = cls.neutron.create_router(
+                'router-project2', project_id=cls.project2.id)
+            cls.routers.append(router_project2)
+            fw = cls.neutron.create_firewall(
+                policy_project1, router_project1, admin_state_up,
+                project_id=cls.project1.id)
+            cls.fws.append(fw)
+            fw = cls.neutron.create_firewall(
+                policy_project2, router_project2, admin_state_up,
+                project_id=cls.project2.id)
+            cls.fws.append(fw)
+            if admin_state_up:
+                cls.nbr_firewalls_up += 2
+            else:
+                cls.nbr_firewalls_down += 2
+
     @classmethod
     def tearDownClass(cls):
         super(FirewallAuditProjectSeparationBase, cls).tearDownClass()
-        if not cls.nbr_firewalls:
+        if Utils.get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
             return  # done
 
         USER.report('\n===== End of tests (%s) =====', cls.__name__)
-        if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_TEARDOWN'):
-            cls.neutron.teardown()
-            cls.keystone.client.projects.delete(cls.project1.id)
-            cls.keystone.client.projects.delete(cls.project2.id)
+        cls.neutron.teardown()
+        cls.keystone.client.projects.delete(cls.project1.id)
+        cls.keystone.client.projects.delete(cls.project2.id)
 
     @classmethod
     def admin_state_up(cls):

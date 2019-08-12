@@ -18,8 +18,8 @@ import mock
 import testtools
 
 # system under test
-from nuage_openstack_audit.main import Main  # system under test
-from nuage_openstack_audit.osclient.osclient import NeutronClient  # f/ mocking
+from nuage_openstack_audit.main import Main as SystemUnderTest
+from nuage_openstack_audit.osclient.osclient import NeutronClient  # for mock'n
 from nuage_openstack_audit.vsdclient.vsdclient import VsdClient  # for mocking
 
 # test code
@@ -38,7 +38,6 @@ from nuage_openstack_audit.test.tempest_plugin.tests.utils.main_args \
     import MainArgs
 from nuage_openstack_audit.utils.logger import Reporter
 from nuage_openstack_audit.utils.utils import Utils
-
 
 # *****************************************************************************
 #  CAUTION : THIS IS NOT A REAL UNIT TEST ; IT REQUIRES A FULL OS-VSD SETUP,
@@ -94,6 +93,13 @@ class FirewallAuditBase(TestBase):
                                     cls.nbr_enabled_rules_per_fw)
         cls.nbr_fw_rules = cls.nbr_firewalls * cls.nbr_rules_per_fw
 
+        cls.main = SystemUnderTest(
+            MainArgs('fwaas',
+                     developer_modus=cls.DEVELOPER_MODUS_TEST_EXECUTION),
+            os_credentials=OS_CREDENTIALS,
+            vsd_credentials=VSD_CREDENTIALS,
+            cms_id=CMS_ID)
+
         USER.report('\n===== Start of tests (%s) =====', cls.__name__)
 
         if not Utils.get_env_bool('OS_AUDIT_TEST_SKIP_SETUP'):
@@ -132,10 +138,6 @@ class FirewallAuditBase(TestBase):
                     cls.nbr_firewalls_up += 1
                 else:
                     cls.nbr_firewalls_down += 1
-
-        USER.report('\n=== Launching system under test ===')
-        cls.main = Main(MainArgs('fwaas'), os_credentials=OS_CREDENTIALS,
-                        vsd_credentials=VSD_CREDENTIALS, cms_id=CMS_ID)
 
     @classmethod
     def tearDownClass(cls):
