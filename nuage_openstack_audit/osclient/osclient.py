@@ -82,7 +82,8 @@ class KeystoneClient(object):
                 self.session = keystone_session.Session(
                     auth=auth,
                     verify=(credentials.ca_cert
-                            if credentials.verify_ca else False))
+                            if credentials.ca_cert and credentials.verify_ca
+                            else credentials.verify_ca))
                 if init_client:
                     self.client = keystone_client.Client(session=self.session)
             else:
