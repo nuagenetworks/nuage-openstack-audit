@@ -143,7 +143,7 @@ class VspkHelper(object):
             yield first_page
 
             if count > kwargs['page_size']:
-                num_pages = int(ceil(count / kwargs['page_size']))
+                num_pages = int(ceil(float(count) / kwargs['page_size']))
                 for page in range(1, num_pages):
                     kwargs['page'] = page
                     yield fetcher.get(**kwargs)
