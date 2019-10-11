@@ -16,6 +16,12 @@
       jobs:
         - networking-nuage-audit-queens
 
+    periodic-sunday:
+      jobs:
+        - networking-nuage-audit-rocky
+        - networking-nuage-audit-stein
+        - networking-nuage-audit-master
+
 - job:
     name: networking-nuage-audit-base
     parent: networking-nuage-base
