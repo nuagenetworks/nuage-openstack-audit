@@ -20,6 +20,7 @@
       jobs:
         - networking-nuage-audit-rocky
         - networking-nuage-audit-stein
+        - networking-nuage-audit-train
         - networking-nuage-audit-master
 
 - job:
@@ -78,6 +79,15 @@
     override-checkout: stable/stein
     vars:
       branch_override: stable/stein
+      devstack_localrc:
+        TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
+
+- job:
+    name: networking-nuage-audit-train
+    parent: networking-nuage-audit-base
+    override-checkout: stable/train
+    vars:
+      branch_override: stable/train
       devstack_localrc:
         TEMPEST_PLUGINS: '"/opt/stack/nuage-tempest-plugin /opt/stack/nuage-openstack-audit"'
 
