@@ -5,6 +5,7 @@
         - networking-nuage-audit-queens
         - networking-nuage-audit-rocky
         - networking-nuage-audit-stein
+        - networking-nuage-audit-train
         - networking-nuage-audit-master
 
     gate:
@@ -27,7 +28,6 @@
     name: networking-nuage-audit-base
     parent: networking-nuage-base
     description: Nuage openstack audit intergation job
-    nodeset: openstack-single-node-xenial
     timeout: 10800
     vars:
       tempest_concurrency: 1

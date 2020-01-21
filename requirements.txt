@@ -5,12 +5,11 @@
 pbr!=2.1.0,>=2.0.0 # Apache-2.0
 
 argparse
-functools32
 keystoneauth1
 netaddr
 six
 osc_lib
 python-keystoneclient
 python-neutronclient
-neutron-lib
+more-itertools==5  # For some reason, pip will try to install a python3 package for more-itertools on CI
 vspk

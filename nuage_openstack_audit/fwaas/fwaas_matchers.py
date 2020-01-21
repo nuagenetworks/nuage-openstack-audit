@@ -13,10 +13,10 @@
 #    under the License.
 
 import netaddr
-from neutron_lib import constants as lib_constants
+from nuage_openstack_audit.utils import constants
 
 from nuage_openstack_audit.utils.matcher import Matcher
-from nuage_openstack_audit.vsdclient.common import constants
+from nuage_openstack_audit.vsdclient.common import constants as vsd_constants
 
 
 OS_ACTION_TO_VSD_ACTION = {
@@ -30,8 +30,8 @@ OS_ACTION_TO_VSD_STATEFUL = {
 }
 
 OS_IPVERSION_TO_VSD_ETHERTYPE = {
-    4: constants.VSP_IPV4_ETHERTYPE,
-    6: constants.VSP_IPV6_ETHERTYPE
+    4: vsd_constants.VSP_IPV4_ETHERTYPE,
+    6: vsd_constants.VSP_IPV6_ETHERTYPE
 }
 
 
@@ -70,8 +70,8 @@ class FirewallRuleMatcher(Matcher):
             'network_id': self._map_network_id(fw_rule),
             'network_type': self._map_network_type(fw_rule),
             'source_port': self._map_source_port(fw_rule),
-            'protocol': lib_constants.IP_PROTOCOL_MAP.get(fw_rule['protocol'],
-                                                          'ANY'),
+            'protocol': constants.IP_PROTOCOL_MAP.get(fw_rule['protocol'],
+                                                      'ANY'),
             'destination_port': self._map_destination_port(fw_rule),
             'action': OS_ACTION_TO_VSD_ACTION[fw_rule['action']],
             'stateful': OS_ACTION_TO_VSD_STATEFUL[fw_rule['action']],

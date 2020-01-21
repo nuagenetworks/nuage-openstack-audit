@@ -14,7 +14,6 @@
 
 import logging
 
-import functools32
 import netaddr
 
 from nuage_openstack_audit.vsdclient.common import constants
@@ -149,7 +148,6 @@ class SecurityGroupsMixin(object):
         else:
             return domain.policy_groups.get_first(filter=vspk_filter)
 
-    @functools32.lru_cache(maxsize=256)
     def get_enterprise_network_id(self, ethertype, remote_ip_prefix):
         assert ethertype in [constants.OS_IPV4_ETHERTYPE,
                              constants.OS_IPV6_ETHERTYPE]

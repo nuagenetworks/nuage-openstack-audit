@@ -382,7 +382,7 @@ class SgAuditMockTest(TestBase):
             kwargs = filters
         # Ignore fields passed as we do need the name field for testing
         ports = self.client.list_ports(**kwargs)['ports']
-        return filter(lambda port: port['id'] not in removed_ports, ports)
+        return [port for port in ports if port['id'] not in removed_ports]
 
     def _get_vports(self, os_port_ids):
         vspk_helper = self.topology.vsd.vspk_helper
@@ -493,10 +493,9 @@ class SgAuditMockTest(TestBase):
     def _mock_get_security_group_missing_rules(self, sg_id):
         # only keep rules with remote_group being the remote_sg
         sg = self.client.show_security_group(sg_id)['security_group']
-        sg['security_group_rules'] = filter(
-            lambda r: (r['remote_group_id'] ==
-                       SgAuditMockTest.topology.remote_sg['id']),
-            sg['security_group_rules'])
+        sg['security_group_rules'] = [
+            r for r in sg['security_group_rules'] if
+            r['remote_group_id'] == SgAuditMockTest.topology.remote_sg['id']]
         return sg
 
     @mock.patch.object(NeutronClient, 'get_security_group',

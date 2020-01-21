@@ -12,10 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from neutron_lib import constants as lib_constants
+from nuage_openstack_audit.utils import constants
 
 from nuage_openstack_audit.utils.matcher import Matcher
-from nuage_openstack_audit.vsdclient.common import constants
+from nuage_openstack_audit.vsdclient.common import constants as vsd_constants
 
 
 class SecurityGroupPolicyGroupMatcher(Matcher):
@@ -32,7 +32,7 @@ class SecurityGroupPolicyGroupMatcher(Matcher):
 
     @staticmethod
     def _map_name(sg):
-        return (sg['id'] + '_HARDWARE' if sg['type'] == constants.HARDWARE
+        return (sg['id'] + '_HARDWARE' if sg['type'] == vsd_constants.HARDWARE
                 else sg['id'])
 
     @staticmethod
@@ -64,8 +64,9 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
                  is_l2_domain, policy_group_id, policygroup_id_fetcher,
                  enterprise_network_id_fetcher):
         self._is_stateful = is_stateful
-        assert acl_template_type in [constants.HARDWARE, constants.SOFTWARE]
-        self._is_hardware = acl_template_type == constants.HARDWARE
+        assert acl_template_type in [vsd_constants.HARDWARE,
+                                     vsd_constants.SOFTWARE]
+        self._is_hardware = acl_template_type == vsd_constants.HARDWARE
         self._is_dhcp_managed = is_dhcp_managed
         self._is_l2_domain = is_l2_domain
         self._policy_group_id = policy_group_id
@@ -121,8 +122,9 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
 
     @staticmethod
     def _get_any_cidr(ethertype):
-        return ('::/0'
-                if ethertype == constants.OS_IPV6_ETHERTYPE else '0.0.0.0/0')
+        return (
+            '::/0' if ethertype == vsd_constants.OS_IPV6_ETHERTYPE else
+            '0.0.0.0/0')
 
     @staticmethod
     def _map_source_port(_):
@@ -194,17 +196,17 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
                 (not str(neutron_obj['port_range_max']) and not
                  str(neutron_obj['port_range_min'])) or
                 neutron_obj['port_range_min'] not in
-                constants.STATEFUL_ICMP_TYPES)):
+                vsd_constants.STATEFUL_ICMP_TYPES)):
             return False
         else:
             return self._is_stateful
 
     @staticmethod
     def _map_ethertype(neutron_obj):
-        if neutron_obj['ethertype'] == constants.OS_IPV4_ETHERTYPE:
-            return constants.VSP_IPV4_ETHERTYPE
-        elif neutron_obj['ethertype'] == constants.OS_IPV6_ETHERTYPE:
-            return constants.VSP_IPV6_ETHERTYPE
+        if neutron_obj['ethertype'] == vsd_constants.OS_IPV4_ETHERTYPE:
+            return vsd_constants.VSP_IPV4_ETHERTYPE
+        elif neutron_obj['ethertype'] == vsd_constants.OS_IPV6_ETHERTYPE:
+            return vsd_constants.VSP_IPV6_ETHERTYPE
         else:
             return None
 
@@ -219,7 +221,7 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
                 vsd_protocol = 'ANY'
             if vsd_protocol != 'ANY':
                 if vsd_protocol == 'icmp' and neutron_obj['ethertype'] == \
-                        constants.OS_IPV6_ETHERTYPE:
+                        vsd_constants.OS_IPV6_ETHERTYPE:
                     vsd_protocol = 'icmpv6'
-                vsd_protocol = lib_constants.IP_PROTOCOL_MAP[vsd_protocol]
+                vsd_protocol = constants.IP_PROTOCOL_MAP[vsd_protocol]
             return vsd_protocol
