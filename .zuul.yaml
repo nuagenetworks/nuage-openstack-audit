@@ -32,3 +32,5 @@
         - nuage-audit-train
         - nuage-audit-ussuri
         - nuage-audit-master
+        - nuage-audit-queens-6-0
+        - nuage-audit-rocky-6-0
