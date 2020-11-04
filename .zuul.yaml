@@ -4,7 +4,6 @@
         - openstack-tox-pep8
         - nuage-audit-queens
         - nuage-audit-rocky
-        - nuage-audit-stein
         - nuage-audit-train
         - nuage-audit-ussuri
         - nuage-audit-master
@@ -14,7 +13,6 @@
         - openstack-tox-pep8
         - nuage-audit-queens
         - nuage-audit-rocky
-        - nuage-audit-stein
         - nuage-audit-train
         - nuage-audit-ussuri
         - nuage-audit-master
@@ -26,7 +24,6 @@
     periodic-sunday:
       jobs:
         - nuage-audit-rocky
-        - nuage-audit-stein
         - nuage-audit-train
         - nuage-audit-ussuri
         - nuage-audit-master
