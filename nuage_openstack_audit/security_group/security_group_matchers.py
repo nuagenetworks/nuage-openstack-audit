@@ -23,12 +23,12 @@ class SecurityGroupPolicyGroupMatcher(Matcher):
     def entity_name(self):
         return 'Security Group'
 
-    def map_to_vsd_object(self, sg):
-        return {
+    def map_to_vsd_objects(self, sg):
+        return [{
             'name': self._map_name(sg),
             'description': self._map_description(sg),
             'type': self._map_type(sg)
-        }
+        }]
 
     @staticmethod
     def _map_name(sg):
@@ -76,17 +76,16 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
     def entity_name(self):
         return 'Security Group Rule'
 
-    def map_to_vsd_object(self, sg_rule):
+    def map_to_vsd_objects(self, sg_rule):
         protocol = sg_rule['protocol'] if sg_rule.get('protocol') else 'ANY'
-        remote_ip_prefix = self._get_remote_ip_prefix(sg_rule)
 
         # common attributes
         vsd_obj = {
             'ether_type': self._map_ethertype(sg_rule),
             'protocol': self._map_protocol(sg_rule, protocol),
             'stateful': self._map_stateful(sg_rule, protocol),
-            'network_type': self._map_network_type(sg_rule, remote_ip_prefix),
-            'network_id': self._map_network_id(sg_rule, remote_ip_prefix),
+            'network_type': self._map_network_type(sg_rule),
+            'network_id': self._map_network_id(sg_rule),
             'location_type': self._map_location_type(sg_rule),
             'location_id': self._map_location_id(sg_rule),
             'action': self._map_action(sg_rule),
@@ -107,10 +106,18 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
             elif sg_rule['port_range_max']:
                 vsd_obj['icmp_code'] = self._map_icmp_code(sg_rule)
 
-        # Return created VSD object
-        return vsd_obj
+        # Return equivalent VSD objects
+        # These are:
+        # - legacy object created by older nuage openstack neutron plugin
+        #   versions (before PG refactoring)
+        # - object created by current nuage openstack neutron plugin
+        legacy_object = dict(
+            vsd_obj,
+            network_type=self._legacy_map_network_type(sg_rule),
+            network_id=self._legacy_map_network_id(sg_rule))
+        return [vsd_obj, legacy_object]
 
-    def _get_remote_ip_prefix(self, sg_rule):
+    def _legacy_get_remote_ip_prefix(self, sg_rule):
         if not sg_rule.get('remote_ip_prefix'):
             if self._is_hardware:
                 return self._get_any_cidr(sg_rule.get('ethertype'))
@@ -166,8 +173,8 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
     def _map_location_type(_):
         return 'POLICYGROUP'
 
-    def _map_network_type(self, neutron_obj, remote_ip_prefix):
-        if remote_ip_prefix:
+    def _legacy_map_network_type(self, neutron_obj):
+        if self._legacy_get_remote_ip_prefix(neutron_obj):
             return 'ENTERPRISE_NETWORK'
         elif ((neutron_obj.get('remote_group_id') and not self._is_hardware) or
                 neutron_obj.get('remote_external_group')):
@@ -177,15 +184,36 @@ class SecurityGroupRuleAclTemplateEntryMatcher(Matcher):
         else:
             return 'ENDPOINT_DOMAIN'
 
-    def _map_network_id(self, neutron_obj, remote_ip_prefix):
+    def _map_network_type(self, neutron_obj):
+        if (neutron_obj.get('remote_group_id') or
+                neutron_obj.get('remote_external_group_id')):
+            return 'POLICYGROUP'
+        elif neutron_obj.get('remote_ip_prefix'):
+            return 'ENTERPRISE_NETWORK'
+        else:
+            return 'ANY'
+
+    def _legacy_map_network_id(self, neutron_obj):
+        remote_ip_prefix = self._legacy_get_remote_ip_prefix(neutron_obj)
+
         if remote_ip_prefix:
+            return self._enterprise_network_id_fetcher(remote_ip_prefix)
+        elif neutron_obj.get('remote_group_id') and not self._is_hardware:
+            return self._policygroup_id_fetcher(neutron_obj['remote_group_id'])
+        elif neutron_obj.get('remote_external_group'):
+            return neutron_obj['remote_external_group']
+        else:
+            return None
+
+    def _map_network_id(self, neutron_obj):
+        if neutron_obj.get('remote_external_group_id'):
+            return neutron_obj['remote_external_group_id']
+        elif neutron_obj.get('remote_ip_prefix'):
             return self._enterprise_network_id_fetcher(
-                neutron_obj.get('ethertype'), remote_ip_prefix)
+                neutron_obj['remote_ip_prefix'])
         elif neutron_obj.get('remote_group_id') and not self._is_hardware:
             return self._policygroup_id_fetcher(
                 neutron_obj['remote_group_id'])
-        elif neutron_obj.get('remote_external_group'):
-            return neutron_obj['remote_external_group']
         else:
             return None
 

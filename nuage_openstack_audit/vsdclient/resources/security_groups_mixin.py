@@ -16,7 +16,6 @@ import logging
 
 import netaddr
 
-from nuage_openstack_audit.vsdclient.common import constants
 from nuage_openstack_audit.vsdclient.common.vspk_helper import VspkHelper
 
 LOG = logging.getLogger(__name__)
@@ -60,10 +59,10 @@ class SecurityGroupsMixin(object):
         kwargs = {'filter': vspk_filter} if vspk_filter else {}
         return kwargs
 
-    def get_egress_acl_templates_by_external_id(self, domain, external_id):
-        kwargs = {'filter':
-                  self.vspk_helper.get_external_id_filter(external_id)}
-
+    def get_egress_acl_templates_by_priority(self, domain, priority):
+        cms_id = domain.external_id.split('@')[1]
+        kwargs = {'filter': ('priority is {} AND externalID ENDSWITH "@{}"'
+                             .format(priority, cms_id))}
         return VspkHelper.get_all(domain, "egress_acl_templates", **kwargs)
 
     @staticmethod
@@ -123,7 +122,7 @@ class SecurityGroupsMixin(object):
             return None
         if not l2_domain:
             LOG.warning('could not fetch the l2 domain '
-                        'matching the filter "{}"'.format(vspk_filter))
+                        'matching the filter "%s"', vspk_filter)
         return l2_domain
 
     def get_vports(self, parent, vspk_filter=None):
@@ -148,9 +147,7 @@ class SecurityGroupsMixin(object):
         else:
             return domain.policy_groups.get_first(filter=vspk_filter)
 
-    def get_enterprise_network_id(self, ethertype, remote_ip_prefix):
-        assert ethertype in [constants.OS_IPV4_ETHERTYPE,
-                             constants.OS_IPV6_ETHERTYPE]
+    def get_enterprise_network_id(self, remote_ip_prefix):
         try:
             ip_network = netaddr.IPNetwork(remote_ip_prefix)
         except netaddr.AddrFormatError:
@@ -165,7 +162,6 @@ class SecurityGroupsMixin(object):
         if not enterprise:
             enterprise = self.vspk_helper.get_default_enterprise()
 
-        assert ip_network.version in [4, 6]
         if ip_network.version == 4:
             return enterprise.enterprise_networks.get_first(
                 filter='address IS "{}" and netmask IS "{}"'

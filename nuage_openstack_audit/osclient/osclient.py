@@ -210,3 +210,14 @@ class NeutronClient(object):
             return self.client.show_security_group(sg_id)['security_group']
         except neutron_exceptions.NotFound:
             return None
+
+    @TimeIt.timeit
+    def get_security_groups(self, filters=None, fields=None):
+        kwargs = {}
+        if filters:
+            kwargs = filters
+        if fields:
+            kwargs['fields'] = fields
+        if self.project_id:
+            kwargs['project_id'] = self.project_id
+        return self.client.list_security_groups(**kwargs)['security_groups']

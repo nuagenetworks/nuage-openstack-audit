@@ -62,8 +62,8 @@ class FirewallRuleMatcher(Matcher):
     def entity_name(self):
         return 'Firewall rule'
 
-    def map_to_vsd_object(self, fw_rule):
-        return {
+    def map_to_vsd_objects(self, fw_rule):
+        return [{
             'address_override': self._map_address_override(fw_rule),
             'ipv6_address_override': self._map_ipv6_address_override(fw_rule),
             'description': fw_rule['name'],
@@ -76,7 +76,7 @@ class FirewallRuleMatcher(Matcher):
             'action': OS_ACTION_TO_VSD_ACTION[fw_rule['action']],
             'stateful': OS_ACTION_TO_VSD_STATEFUL[fw_rule['action']],
             'ether_type': OS_IPVERSION_TO_VSD_ETHERTYPE[fw_rule['ip_version']]
-        }
+        }]
 
     @staticmethod
     def _map_address_override(fw_rule):

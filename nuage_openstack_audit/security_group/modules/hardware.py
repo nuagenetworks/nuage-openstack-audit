@@ -29,13 +29,12 @@ class HardwarePGAudit(Audit):
         self.cnt_in_sync = Counter()
 
     def audit_default_block_all_acl(self, domain, os_id):
-        """A block all acl with lowest priority should exist"""
-        acls = list(self.vsd.get_egress_acl_templates_by_external_id(
-            domain, external_id='hw:{}'.format(os_id)))
-        acls_cnt = len(acls)
+        """A block all acl with priority=1 should exist"""
+        acls = list(self.vsd.get_egress_acl_templates_by_priority(
+            domain=domain, priority=1))
 
         # No acls
-        if acls_cnt == 0:
+        if len(acls) == 0:
             self.audit_report.append({
                 'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
                 'entity_type': 'Router',
@@ -44,18 +43,6 @@ class HardwarePGAudit(Audit):
                 'discrepancy_details': 'Missing hardware block-all ACL.'
             })
             return False
-
-        # Too many acls
-        if acls_cnt > 1:
-            acls.sort(key=lambda x: x.priority)
-            for orphan in acls[1:]:
-                self.audit_report.append({
-                    'discrepancy_type': 'ORPHAN_VSD_ENTITY',
-                    'entity_type': 'Egress ACL template',
-                    'neutron_entity': os_id,
-                    'vsd_entity': orphan.id,
-                    'discrepancy_details': 'Duplicate hardware block-all '
-                                           'ACL.'})
 
         acl_entries = list(self.vsd.get_egress_acl_entries_by_acl(acls[0]))
         acl_entries_cnt = len(acl_entries)
@@ -86,7 +73,7 @@ class HardwarePGAudit(Audit):
         # Check the acl entry with highest priority
         entry = acl_entries[0]
         # TODO(vandewat) check other stuff as well like locationID?
-        # See nuage-openstack-neutron policygroups.py create_default_deny_rule
+        # nuage-openstack-neutron policygroups.py: find_create_security_groups
         if (entry.protocol != 'ANY' or
                 entry.network_type != 'ANY' or
                 entry.location_type != 'POLICYGROUP' or
