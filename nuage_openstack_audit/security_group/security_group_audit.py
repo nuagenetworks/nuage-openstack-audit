@@ -45,7 +45,10 @@ AUTO_CREATE_PORT_OWNERS = ['network:router_interface',
                            'network:router_gateway', 'network:floatingip',
                            'nuage:vip', 'compute:ironic', 'network:dhcp:nuage']
 
-PG_ALLOW_ALL = 'PG_ALLOW_ALL'
+
+def is_pg_allow_all(sg_id):
+    # check for fake ID
+    return sg_id.startswith(constants.PG_ALLOW_ALL)
 
 
 class SGPortsTuple(object):
@@ -71,6 +74,7 @@ class SecurityGroupAudit(Audit):
         self.neutron = neutron
         self.vsd = vsd
         self.cms_id = cms_id
+        self.all_sgs = []
 
         self.audit_report = []
         self.cnt_in_sync = Counter()
@@ -188,6 +192,8 @@ class SecurityGroupAudit(Audit):
             - Call audit_security_group_rules for every security group
             - Compare set of sg_ports with set of pg_vports
         """
+        self.all_sgs = self.neutron.get_security_groups()
+
         for router_id, subnet_ids in six.iteritems(
                 self._get_router_to_subnet_mapping()):
             if router_id:
@@ -218,8 +224,7 @@ class SecurityGroupAudit(Audit):
                 .format(router_id))
         if not subnet_ids:
             return
-        domain = self.vsd.get_l3domain(by_neutron_id=router_id,
-                                       vspk_filter=self.vspk_filter)
+        domain = self.vsd.get_l3domain(by_neutron_id=router_id)
         if domain is None:
             self.audit_report.append({
                 'discrepancy_type': 'ORPHAN_NEUTRON_ENTITY',
@@ -246,12 +251,8 @@ class SecurityGroupAudit(Audit):
                 else sg['id'])
 
     def audit_domain(self, domain, network_id, subnet_ids, is_l2):
-        sg_to_ports = self._get_sg_id_to_sg_and_ports_mapping(subnet_ids)
-        # Calculate PG -> vports dict
-        # vports is a fetcher on policygroup
-        # filter out the PG_ALLOW_ALL
         _filter = "NOT(name BEGINSWITH '{}') AND {}".format(
-            PG_ALLOW_ALL, self.vspk_filter)
+            constants.PG_ALLOW_ALL, self.vspk_filter)
         policygroups = list(self.vsd.get_policy_groups(
             domain, vspk_filter=_filter))
         policygroup_id_by_os_id = {self.strip_cms_id(pg.external_id): pg.id
@@ -260,9 +261,12 @@ class SecurityGroupAudit(Audit):
         def policygroup_id_fetcher(os_id):
             return policygroup_id_by_os_id.get(os_id)
 
+        sg_to_ports = self._get_sg_id_to_sg_and_ports_mapping(subnet_ids,
+                                                              policygroups)
+
         # Compare security groups with policy groups
         security_groups = [sg for (sg, _) in sg_to_ports.values()
-                           if not sg['id'].startswith(PG_ALLOW_ALL)]
+                           if not is_pg_allow_all(sg['id'])]
 
         def on_in_sync(policygroup, securitygroup):
             self.audit_security_group_ports(sg_to_ports, policygroup,
@@ -294,11 +298,10 @@ class SecurityGroupAudit(Audit):
         # audit PG_ALLOW_ALL if needed
         for template_type in [ACL_TEMPLATE_HARDWARE, ACL_TEMPLATE_SOFTWARE]:
             is_hw = template_type == ACL_TEMPLATE_HARDWARE
-            _, ports = (sg_to_ports.get('{}_{}'.format(PG_ALLOW_ALL,
-                                                       template_type)) or
-                        (None, []))
+            _, ports = (sg_to_ports.get('{}_{}'.format(
+                constants.PG_ALLOW_ALL, template_type)) or (None, []))
             vspk_filter = ("name BEGINSWITH '{}' and type IS '{}' and {}"
-                           .format(PG_ALLOW_ALL, template_type,
+                           .format(constants.PG_ALLOW_ALL, template_type,
                                    self.vspk_filter))
             pgs_allow_all = list(self.vsd.get_policy_groups(domain,
                                                             vspk_filter))
@@ -391,7 +394,7 @@ class SecurityGroupAudit(Audit):
 
         return router_to_subnet
 
-    def _get_sg_id_to_sg_and_ports_mapping(self, subnet_ids):
+    def _get_sg_id_to_sg_and_ports_mapping(self, subnet_ids, policygroups):
         result = defaultdict(SGPortsTuple)
 
         # map the security group ids to ports
@@ -407,7 +410,7 @@ class SecurityGroupAudit(Audit):
                 sg_type = (ACL_TEMPLATE_HARDWARE
                            if self.is_bound_baremetal_port(port)
                            else ACL_TEMPLATE_SOFTWARE)
-                sg_id = PG_ALLOW_ALL + '_' + sg_type
+                sg_id = constants.PG_ALLOW_ALL + '_' + sg_type
                 # Here we directly create the sg_group dictionary as it is
                 # artificial anyway
                 if result[sg_id].security_group is None:
@@ -417,7 +420,7 @@ class SecurityGroupAudit(Audit):
 
         # fetch and add the security group objects
         for sg_id, sg_ports_tuple in six.iteritems(result):
-            if sg_id.startswith(PG_ALLOW_ALL):
+            if is_pg_allow_all(sg_id):
                 continue
             sg = self.neutron.get_security_group(sg_id)
             sg['type'] = (ACL_TEMPLATE_HARDWARE
@@ -439,6 +442,25 @@ class SecurityGroupAudit(Audit):
                 continue  # invalid
             remote_sg['type'] = ACL_TEMPLATE_SOFTWARE
             result[remote_group_id].security_group = remote_sg
+
+        # add the security groups corresponding to empty policy groups since
+        # policy groups are only deleted once the security group is deleted,
+        # not when the last port is deleted.
+        for pg in policygroups:
+            os_id = self.strip_cms_id(pg.external_id)
+            is_hw = os_id.startswith('hw:')
+            if is_hw:
+                os_id = os_id[3:]
+            if os_id in result:
+                continue  # don't add it again
+            _, _, count = pg.vports.count()
+            if count == 0:
+                sg = next((sg for sg in self.all_sgs if os_id == sg['id']),
+                          False)
+                if sg:
+                    sg['type'] = (ACL_TEMPLATE_HARDWARE
+                                  if is_hw else ACL_TEMPLATE_SOFTWARE)
+                    result[sg['id']].security_group = sg
 
         return result
 

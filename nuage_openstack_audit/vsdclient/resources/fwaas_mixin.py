@@ -52,7 +52,7 @@ class FWaaSMixin(object):
 
         if not firewall_acl:
             LOG.warning('could not fetch the firewall_acl matching '
-                        'the filter "{}"'.format(vspk_filter))
+                        'the filter "%s"', vspk_filter)
         return firewall_acl
 
     def get_firewall_rule(self, ent=None, vspk_filter=None,
@@ -83,7 +83,7 @@ class FWaaSMixin(object):
 
         if not firewall_rule:
             LOG.warning('could not fetch the firewall_rule matching '
-                        'the filter "{}"'.format(vspk_filter))
+                        'the filter "%s"', vspk_filter)
         return firewall_rule
 
     def get_firewall_acls(self, ent=None, vspk_filter=None):
@@ -120,7 +120,7 @@ class FWaaSMixin(object):
                 yield acl
         else:
             LOG.warning('could not fetch the firewall_acl matching '
-                        'the os policy id "{}"'.format(os_policy_id))
+                        'the os policy id "%s"', os_policy_id)
 
     def get_firewalls(self, ent=None):
         Firewall = namedtuple(

@@ -70,15 +70,6 @@ class Main(object):
                                 default=None)
             args = parser.parse_args()
 
-        # No security group audit in 20.10R1 (OPENSTACK-2957)
-        not_implemented_msg = ('Security group audit is not supported in the '
-                               'current release.')
-        if args.resource == 'all':
-            WARN.report(not_implemented_msg)
-            args.resource = 'fwaas'
-        elif args.resource == 'security_group':
-            raise NotImplementedError(not_implemented_msg)
-
         Main.developer_modus = self.check_developer_modus()
         self.debug = args.debug or Main.developer_modus
         self.verbose = args.verbose
