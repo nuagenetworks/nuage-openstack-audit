@@ -5,7 +5,7 @@
         - nuage-audit-queens
         - nuage-audit-rocky
         - nuage-audit-train
-        - nuage-audit-ussuri
+        - nuage-audit-victoria
         - nuage-audit-master
 
     gate:
@@ -14,16 +14,16 @@
         - nuage-audit-queens
         - nuage-audit-rocky
         - nuage-audit-train
-        - nuage-audit-ussuri
+        - nuage-audit-victoria
         - nuage-audit-master
 
     periodic:
       jobs:
         - nuage-audit-queens
+        - nuage-audit-rocky
 
     periodic-sunday:
       jobs:
-        - nuage-audit-rocky
         - nuage-audit-train
-        - nuage-audit-ussuri
+        - nuage-audit-victoria
         - nuage-audit-master
