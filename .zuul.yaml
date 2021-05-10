@@ -2,7 +2,6 @@
     check:
       jobs:
         - openstack-tox-pep8
-        - nuage-audit-queens
         - nuage-audit-rocky
         - nuage-audit-train
         - nuage-audit-victoria
@@ -11,7 +10,6 @@
     gate:
       jobs:
         - openstack-tox-pep8
-        - nuage-audit-queens
         - nuage-audit-rocky
         - nuage-audit-train
         - nuage-audit-victoria
@@ -19,7 +17,6 @@
 
     periodic:
       jobs:
-        - nuage-audit-queens
         - nuage-audit-rocky
 
     periodic-sunday:
