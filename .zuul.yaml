@@ -5,6 +5,7 @@
         - nuage-audit-rocky
         - nuage-audit-train
         - nuage-audit-victoria
+        - nuage-audit-wallaby
         - nuage-audit-master
 
     gate:
@@ -13,14 +14,16 @@
         - nuage-audit-rocky
         - nuage-audit-train
         - nuage-audit-victoria
+        - nuage-audit-wallaby
         - nuage-audit-master
 
     periodic:
       jobs:
         - nuage-audit-rocky
+        - nuage-audit-train
 
     periodic-sunday:
       jobs:
-        - nuage-audit-train
         - nuage-audit-victoria
+        - nuage-audit-wallaby
         - nuage-audit-master
