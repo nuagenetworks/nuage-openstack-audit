@@ -4,7 +4,6 @@
         - openstack-tox-pep8
         - nuage-audit-rocky
         - nuage-audit-train
-        - nuage-audit-victoria
         - nuage-audit-wallaby
         - nuage-audit-master
 
@@ -13,17 +12,12 @@
         - openstack-tox-pep8
         - nuage-audit-rocky
         - nuage-audit-train
-        - nuage-audit-victoria
         - nuage-audit-wallaby
         - nuage-audit-master
 
-    periodic:
+    periodic-sunday:
       jobs:
         - nuage-audit-rocky
         - nuage-audit-train
-
-    periodic-sunday:
-      jobs:
-        - nuage-audit-victoria
         - nuage-audit-wallaby
         - nuage-audit-master
